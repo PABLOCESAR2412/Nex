@@ -3,6 +3,7 @@ dist/
 .wrangler/
 .tanstack/
 .output/
+graphify-out/
 .env
 .env.*
 !.env.example

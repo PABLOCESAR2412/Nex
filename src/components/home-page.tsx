@@ -1,80 +1,9 @@
+import { StudioShell } from './studio-shell';
+
 export function HomePage() {
   return (
-
-    <div className="app-shell">
-      <aside className="sidebar" aria-label="Navegación principal">
-        <a className="brand" href="#inicio" aria-label="Nex, inicio">
-          <svg className="brand-mark" viewBox="0 0 40 40" aria-hidden="true">
-            <path d="M9 30 30 9M11 10l19 20M8 20h24" />
-            <circle cx="9" cy="30" r="2.2" />
-            <circle cx="30" cy="9" r="2.2" />
-            <circle cx="30" cy="30" r="2.2" />
-          </svg>
-          <span>Nex</span>
-        </a>
-
-        <div className="workspace-switcher">
-          <span className="workspace-monogram">P</span>
-          <span className="workspace-copy"><strong>Mi estudio</strong><small>Espacio personal</small></span>
-          <svg className="icon chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5" /></svg>
-        </div>
-
-        <nav className="primary-nav">
-          <p className="nav-label">Espacio</p>
-          <a className="nav-link active" href="#inicio" aria-current="page">
-            <svg className="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z" /></svg>
-            <span>Inicio</span>
-          </a>
-          <a className="nav-link" href="#calendario" aria-disabled="true">
-            <svg className="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></svg>
-            <span>Calendario</span>
-          </a>
-          <a className="nav-link" href="#biblioteca" aria-disabled="true">
-            <svg className="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v17H6.5A2.5 2.5 0 0 1 4 17.5z" /><path d="M4 17.5A2.5 2.5 0 0 1 6.5 15H20M8 7h8M8 10h6" /></svg>
-            <span>Biblioteca</span>
-          </a>
-          <a className="nav-link" href="#cuentas" aria-disabled="true">
-            <svg className="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3" /><path d="M8 20v-2a4 4 0 0 1 8 0v2M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" /></svg>
-            <span>Cuentas</span>
-          </a>
-          <a className="nav-link" href="#despliegues" aria-disabled="true">
-            <svg className="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s7-4 7-11V5l-7-3-7 3v4c0 7 7 11 7 11Z" /><path d="m9 12 2 2 4-5" /></svg>
-            <span>Despliegues</span>
-          </a>
-
-          <p className="nav-label nav-label-spaced">Preferencias</p>
-          <a className="nav-link" href="#ajustes" aria-disabled="true">
-            <svg className="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" /><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.8-.6a8 8 0 0 1-1.5.9l-.4 1.9h-2.8l-.4-1.9a8 8 0 0 1-1.5-.9l-1.8.6-1.4-2.4 1.4-1.1a7.4 7.4 0 0 1 0-1.8l-1.4-1.1 1.4-2.4 1.8.6a8 8 0 0 1 1.5-.9l.4-1.9h2.8l.4 1.9a8 8 0 0 1 1.5.9l1.8-.6 1.4 2.4-1.4 1.1a7.4 7.4 0 0 1 0 1.7Z" transform="translate(-2 -2)" /></svg>
-            <span>Ajustes</span>
-          </a>
-        </nav>
-
-        <div className="sidebar-bottom">
-          <div className="cloud-status"><span className="status-dot"></span><span>Espacio preparado</span></div>
-          <div className="user-profile">
-            <span className="avatar">P</span>
-            <span><strong>Pablo</strong><small>Plan personal</small></span>
-            <button className="icon-button profile-menu" type="button" disabled aria-label="Más opciones del perfil">
-              <svg className="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></svg>
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      <main className="main-panel" id="inicio">
-        <header className="topbar">
-          <div className="breadcrumb"><span>Mi estudio</span><svg className="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6" /></svg><span className="breadcrumb-current">Inicio</span></div>
-          <div className="topbar-actions">
-            <label className="search-box">
-              <svg className="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 5 5" /></svg>
-              <input type="search" placeholder="Buscar campañas, videos…" aria-label="Buscar campañas y videos" />
-              <kbd>⌘ K</kbd>
-            </label>
-            <button className="avatar avatar-top" type="button" disabled aria-label="Perfil de Pablo">P</button>
-          </div>
-        </header>
-
-        <div className="content-wrap">
+    <StudioShell active="inicio">
+      <div className="content-wrap">
           <section className="welcome-row" aria-labelledby="page-title">
             <div>
               <p className="date-line">LUNES, 9 DE NOVIEMBRE</p>
@@ -107,7 +36,7 @@ export function HomePage() {
             <section className="production-section" aria-labelledby="production-title">
               <div className="section-heading">
                 <div><h2 id="production-title">Producción en curso</h2><p>Una pieza está lista para revisión.</p></div>
-                <button className="quiet-button" type="button" disabled>Ver biblioteca <span aria-hidden="true">↗</span></button>
+                <a className="quiet-button" href="/biblioteca">Ver biblioteca <span aria-hidden="true">↗</span></a>
               </div>
               <article className="production-feature">
                 <div className="reel-cover-wrap">
@@ -160,7 +89,7 @@ export function HomePage() {
                   <span className="schedule-state"><i></i>Programada</span>
                 </li>
               </ul>
-              <button className="text-link" type="button" disabled>Ver calendario completo <span aria-hidden="true">↗</span></button>
+              <a className="text-link" href="/calendario">Ver calendario completo <span aria-hidden="true">↗</span></a>
             </section>
           </div>
 
@@ -186,8 +115,6 @@ export function HomePage() {
 
           <footer className="page-footer"><span>Un espacio para dar forma a las ideas.</span><span>Prototipo visual · Nex</span></footer>
         </div>
-      </main>
-    </div>
-  
+    </StudioShell>
   );
 }

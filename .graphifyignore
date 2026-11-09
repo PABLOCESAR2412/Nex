@@ -1,0 +1,13 @@
+# Keep the Nex project graph focused on source, not generated content or local state.
+*.md
+*.mdx
+*.txt
+*.svg
+node_modules/
+dist/
+.wrangler/
+.wrangler-config/
+.tanstack/
+.task-tmp/
+.impeccable/
+graphify-out/

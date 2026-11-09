@@ -50,9 +50,16 @@ El comando de build es necesario para que TanStack Start y Vite generen el Worke
 src/
   components/
     home-page.tsx    # composición React del dashboard de muestra
+    studio-shell.tsx # navegación compartida y cabecera
+    studio-pages.tsx # calendario, biblioteca, cuentas, despliegues y ajustes
   routes/
     __root.tsx       # documento HTML, metadatos y estilos globales
-    index.tsx        # ruta inicial
+    index.tsx        # Inicio
+    calendario.tsx   # Calendario
+    biblioteca.tsx   # Biblioteca
+    cuentas.tsx      # Cuentas
+    despliegues.tsx  # Despliegues
+    ajustes.tsx      # Ajustes
   router.tsx         # configuración de TanStack Router
   styles.css         # Tailwind y tokens visuales conservados
 public/assets/       # marca e ilustración SVG

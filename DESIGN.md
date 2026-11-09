@@ -32,7 +32,12 @@ La interfaz prioriza campañas, estado de revisión y calendario. No imita una c
 
 - Navegación lateral estable en escritorio; se reduce a una banda de iconos en móvil.
 - Cabecera con ruta, búsqueda y perfil.
-- Inicio: encabezado y acción principal, resumen, producción y publicaciones próximas, calendario semanal.
+- **Inicio:** encabezado y acción principal, resumen, producción y publicaciones próximas, calendario semanal.
+- **Calendario:** semana completa con navegación contextual, piezas por canal y lista de próximas publicaciones. En móvil, solo el tablero conserva desplazamiento horizontal.
+- **Biblioteca:** búsqueda y filtros en reposo, portada editorial para video, archivos agrupados por tipo y estado de producción.
+- **Cuentas:** canales sociales con nombre, uso y estado legible. Las cuentas de muestra se identifican como ejemplos y no como sesiones conectadas.
+- **Despliegues:** proyectos de Cloudflare y Vercel en una lista de actividad y contexto de publicación; dominios `.example` son ilustrativos.
+- **Ajustes:** identidad del estudio, preferencias previstas y notificaciones, con controles en reposo hasta implementar persistencia.
 - Separadores finos organizan grupos; evitar una cuadrícula de tarjetas idénticas.
 - La portada de muestra es un afiche vectorial editorial. Los elementos de ejemplo no son datos conectados.
 
@@ -56,6 +61,6 @@ La interfaz prioriza campañas, estado de revisión y calendario. No imita una c
 
 ## Evolución de diseño
 
-Las futuras vistas de biblioteca, cuentas, calendario, ajustes y despliegues heredan esta paleta, tipografía y espaciado. Cada integración debe mostrar su estado (conectada, requiere atención o no configurada) en texto y en color, mantener las credenciales fuera de la interfaz pública y conservar la misma jerarquía entre campaña, archivo y destino.
+Las vistas de biblioteca, cuentas, calendario, ajustes y despliegues heredan esta paleta, tipografía y espaciado. Cada integración debe mostrar su estado (conectada, requiere atención o no configurada) en texto y en color, mantener las credenciales fuera de la interfaz pública y conservar la misma jerarquía entre campaña, archivo y destino.
 
-No añadir controles activos hasta que exista el flujo correspondiente. Los datos de muestra deben reemplazarse por estados vacíos y datos reales antes de publicar Nex para usuarios.
+La navegación entre las seis vistas está activa. El resto de controles se mantiene deshabilitado hasta que exista el flujo correspondiente. Los datos de muestra se identifican como tales y deben reemplazarse por estados vacíos y datos reales antes de publicar Nex para usuarios.

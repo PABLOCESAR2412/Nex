@@ -28,7 +28,7 @@ The user expects to create videos with DeepSeek Harness and local tools, then st
 
 ## Capabilities and Constraints
 
-- The current delivery is a visual prototype only; buttons, navigation, accounts, uploads, scheduling, publishing, and deployments are not connected.
+- The current delivery is a visual prototype only. Navigation between Inicio, Calendario, Biblioteca, Cuentas, Despliegues and Ajustes works; search, account connections, uploads, scheduling, publishing, deployment actions and preference saving are not connected.
 - Cloudflare Workers is the intended initial host. Database, object storage, queues, social APIs, and deployment integrations remain future work.
 - Prototype metrics and campaign content are illustrative and must not be represented as live account data.
 
