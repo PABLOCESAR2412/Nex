@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 820" fill="none">
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="640" y2="820" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#273B2D"/><stop offset="1" stop-color="#142219"/>
+    </linearGradient>
+    <linearGradient id="wash" x1="55" y1="65" x2="550" y2="770" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8BA778" stop-opacity=".42"/><stop offset="1" stop-color="#8BA778" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="820" rx="24" fill="url(#ground)"/>
+  <path d="M0 540C154 458 276 490 382 418s177-197 258-170v572H0V540Z" fill="#1D3024"/>
+  <path d="M0 192h640M0 205h640M420 0v820M435 0v820" stroke="#D9E4CB" stroke-opacity=".14" stroke-width="2"/>
+  <path d="M0 0h420v820H0z" fill="url(#wash)"/>
+  <circle cx="320" cy="478" r="161" stroke="#DCE7D0" stroke-opacity=".35" stroke-width="1.5"/>
+  <circle cx="320" cy="478" r="134" stroke="#DCE7D0" stroke-opacity=".2" stroke-width="1" stroke-dasharray="2 8"/>
+  <path d="M255 503c0-25 21-46 46-46h77v117H301c-25 0-46-21-46-46v-25Z" fill="#D8D2B7"/>
+  <path d="M378 474h25a34 34 0 0 1 0 68h-25" stroke="#D8D2B7" stroke-width="13"/>
+  <path d="M290 474c4-22 16-34 34-37m-2 35c2-23 15-38 33-45" stroke="#EFF0DD" stroke-opacity=".65" stroke-width="3" stroke-linecap="round"/>
+  <path d="M238 586h164" stroke="#D8D2B7" stroke-opacity=".5" stroke-width="2"/>
+  <text x="54" y="80" fill="#C1D4AE" font-family="Arial,sans-serif" font-size="16" letter-spacing="4">NEX  /  PIEZA 014</text>
+  <text x="54" y="170" fill="#F1EFDF" font-family="Georgia,serif" font-size="62">Café</text>
+  <text x="54" y="232" fill="#F1EFDF" font-family="Georgia,serif" font-size="62" font-style="italic">de origen</text>
+  <path d="M54 267h125" stroke="#C1D4AE" stroke-opacity=".7"/>
+  <text x="54" y="304" fill="#D0D8C7" font-family="Arial,sans-serif" font-size="14" letter-spacing="2">UNA PAUSA, UNA HISTORIA</text>
+  <text x="54" y="756" fill="#D0D8C7" font-family="Arial,sans-serif" font-size="14" letter-spacing="2">REEL  ·  00:58  ·  VERTICAL</text>
+  <circle cx="548" cy="756" r="25" fill="#B9D0A4"/>
+  <path d="m544 746 15 10-15 10v-20Z" fill="#17241B"/>
+</svg>
+
