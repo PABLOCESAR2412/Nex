@@ -1,3 +1,5 @@
+@import 'tailwindcss';
+
 :root {
   color-scheme: dark;
   --pine-950: #0c1510;
@@ -370,4 +372,3 @@ h1 { margin-bottom: 9px; color: var(--ivory); font: 500 clamp(35px, 4.1vw, 55px)
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
-

@@ -1,52 +1,64 @@
 # Nex
 
-Prototipo visual del espacio para organizar campañas, videos y publicaciones. Esta entrega usa HTML y CSS estáticos; no contiene lógica de producto, cuentas conectadas, base de datos, cargas, publicaciones ni autenticación.
+Nex es un espacio visual para organizar campañas, videos y publicaciones. Esta fase reemplaza el HTML estático por la base de aplicación elegida, conservando el diseño aprobado y los datos ilustrativos. Todavía no conecta cuentas, no carga archivos, no programa publicaciones ni guarda información.
 
-## Vista previa local
+## Tecnologías
 
-Abre `public/index.html` en un navegador. Para probarlo en el runtime de Cloudflare, usa `npx wrangler dev` desde la raíz del repositorio.
+- **Aplicación:** TanStack Start, React y TypeScript.
+- **Desarrollo y compilación:** Vite.
+- **Paquetes y scripts:** Bun (`bun@1.4.0`, fijado en `package.json`).
+- **Estilos:** Tailwind CSS 4 por su plugin de Vite; los tokens y reglas existentes siguen en `src/styles.css` para conservar la identidad visual.
+- **Alojamiento:** Cloudflare Workers mediante `@cloudflare/vite-plugin` y Wrangler.
 
-## Cloudflare
+Bun se usa para instalar y compilar. El runtime publicado es Cloudflare Workers.
 
-La captura muestra que el proceso se detiene en **Clonando repositorio**. El repositorio `PABLOCESAR2412/Nex` existe y es público, pero GitHub responde que está vacío (`size: 0`; la API de contenidos devuelve `This repository is empty`). No hay commit ni referencia que Cloudflare pueda clonar. Por eso falla antes del comando de despliegue; el registro no indica todavía un error de token ni de Wrangler.
+## Desarrollo local
 
-El proyecto incluye `wrangler.jsonc` con `assets.directory` apuntando a `public/`, adecuado para servir el prototipo estático desde Workers Static Assets. Cloudflare documenta el despliegue de assets con Wrangler y el comando `npx wrangler deploy` [en su guía oficial](https://developers.cloudflare.com/workers/static-assets/get-started/).
-
-Cuando haya un primer commit en `main`, la configuración de Workers Builds para esta versión puede ser:
-
-- Directorio raíz: `/`
-- Comando de compilación: vacío
-- Comando de despliegue: `npx wrangler deploy`
-
-El nombre de proyecto y la conexión de GitHub que aparecen en la captura no bastan si el repositorio no tiene contenido. Después de subir el primer commit, vuelve a ejecutar la compilación; si aparece un nuevo error, será una etapa posterior y habrá que leer su registro específico.
-
-## Estructura recomendada para la siguiente fase
-
-Esta entrega mantiene solo los archivos necesarios para el diseño. Para añadir lógica después, la propuesta es separar la aplicación web del trabajo asíncrono:
-
-```text
-apps/
-  web/                 # React + TypeScript + Vite; vistas y componentes
-  api/                 # Worker para sesiones, campañas y metadatos
-  publisher/           # Worker consumidor de cola y tareas programadas
-packages/
-  domain/              # Tipos y reglas de campañas independientes del proveedor
-  integrations/        # Adaptadores de Cloudflare, Vercel y redes sociales
-infra/
-  migrations/          # Migraciones de D1
-public/                # Archivos estáticos y portada de marca
-DESIGN.md              # Tokens y reglas visuales
-PRODUCT.md             # Propósito y límites del producto
-wrangler.jsonc         # Configuración Cloudflare
+```sh
+bun install
+bun run dev
 ```
 
-### Servicios previstos, aún no creados
+Comprobaciones y vista previa:
 
-- **D1:** campañas, cuentas, publicaciones, estados y metadatos.
-- **R2:** videos, imágenes y archivos finales; no guardar binarios grandes en D1.
-- **Queues + Cron Triggers:** ejecutar publicaciones programadas y reintentar fallos fuera de la petición web.
-- **Secrets / almacenamiento cifrado:** credenciales OAuth, nunca en el frontend ni en Git.
-- **Harness local:** crear y renderizar video; luego enviar el archivo a Nex para organizarlo y programarlo.
+```sh
+bun run typecheck
+bun run build
+bun run preview
+```
 
-El diseño no implica que una plataforma social permita cualquier forma de publicación: cada integración deberá respetar OAuth, permisos y requisitos vigentes del servicio.
+Despliegue manual desde una sesión autenticada con Wrangler:
 
+```sh
+bunx wrangler login
+bun run deploy:local
+```
+
+## Workers Builds
+
+El Worker existente se llama `nex` y está conectado al repositorio `PABLOCESAR2412/Nex`, rama `main`, con raíz `/`. En **Workers & Pages → nex → Settings → Builds**, configura:
+
+- **Build command:** `bun run build`
+- **Deploy command:** `bun run deploy`
+- **Root directory:** `/`
+
+El comando de build es necesario para que TanStack Start y Vite generen el Worker y los assets. Si queda vacío, `wrangler deploy` no tendrá una compilación válida que publicar. La conexión y el token de Workers Builds siguen gestionándose desde Cloudflare; no se guardan secretos en este repositorio.
+
+## Organización
+
+```text
+src/
+  components/
+    home-page.tsx    # composición React del dashboard de muestra
+  routes/
+    __root.tsx       # documento HTML, metadatos y estilos globales
+    index.tsx        # ruta inicial
+  router.tsx         # configuración de TanStack Router
+  styles.css         # Tailwind y tokens visuales conservados
+public/assets/       # marca e ilustración SVG
+wrangler.jsonc       # entrada del Worker y configuración de Cloudflare
+DESIGN.md            # sistema visual y reglas para futuras vistas
+PRODUCT.md           # alcance del producto y límites de esta fase
+```
+
+El calendario, los contadores y las campañas visibles son contenido de muestra, no información de redes conectadas. D1, R2, colas, OAuth, publicación social y despliegues desde Nex quedan para una fase posterior.

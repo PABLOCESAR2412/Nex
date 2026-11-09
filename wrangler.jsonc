@@ -1,8 +1,10 @@
 {
+  "$schema": "node_modules/wrangler/config-schema.json",
   "name": "nex",
   "compatibility_date": "2026-11-09",
-  "assets": {
-    "directory": "./public/"
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "@tanstack/react-start/server-entry",
+  "observability": {
+    "enabled": true
   }
 }
-

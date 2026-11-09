@@ -59,4 +59,3 @@ La interfaz prioriza campañas, estado de revisión y calendario. No imita una c
 Las futuras vistas de biblioteca, cuentas, calendario, ajustes y despliegues heredan esta paleta, tipografía y espaciado. Cada integración debe mostrar su estado (conectada, requiere atención o no configurada) en texto y en color, mantener las credenciales fuera de la interfaz pública y conservar la misma jerarquía entre campaña, archivo y destino.
 
 No añadir controles activos hasta que exista el flujo correspondiente. Los datos de muestra deben reemplazarse por estados vacíos y datos reales antes de publicar Nex para usuarios.
-

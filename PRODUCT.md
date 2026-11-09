@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-Cloudflare Workers with Static Assets; this first delivery is a static HTML/CSS prototype. No application logic or external integrations yet.
+TanStack Start, React, TypeScript, Vite, Bun, Tailwind CSS, and Cloudflare Workers. The current delivery remains a visual prototype without application logic or external integrations.
 
 ## Users
 
@@ -46,4 +46,3 @@ The user-provided content-studio reference image is the visual reference. No rea
 - Make publication state and next actions easy to scan.
 - Keep generated media in its own storage workflow; do not assume Workers render videos.
 - Clearly distinguish sample data from connected account data.
-
