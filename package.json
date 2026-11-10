@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite dev",
     "typecheck": "tsc --noEmit",
-    "build": "vite build && tsc --noEmit",
+    "build": "bun run cf-typegen && vite build && tsc --noEmit",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
