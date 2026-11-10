@@ -1,10 +1,10 @@
 import { StudioShell } from './studio-shell';
+import { Link } from "@tanstack/react-router";
 
 export function HomePage() {
   return (
     <StudioShell active="inicio">
-      <div className="content-wrap">
-          <section className="welcome-row" aria-labelledby="page-title">
+      <section className="welcome-row" aria-labelledby="page-title">
             <div>
               <p className="date-line">LUNES, 9 DE NOVIEMBRE</p>
               <h1 id="page-title">Tu estudio de contenido</h1>
@@ -12,7 +12,7 @@ export function HomePage() {
             </div>
             <button className="primary-button" type="button" disabled>
               <svg className="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
-              <span>Crear campaña</span>
+              <span>Crear pieza</span>
             </button>
           </section>
 
@@ -36,7 +36,7 @@ export function HomePage() {
             <section className="production-section" aria-labelledby="production-title">
               <div className="section-heading">
                 <div><h2 id="production-title">Producción en curso</h2><p>Una pieza está lista para revisión.</p></div>
-                <a className="quiet-button" href="/biblioteca">Ver biblioteca <span aria-hidden="true">↗</span></a>
+                <Link className="quiet-button" to="/biblioteca">Ver biblioteca <span aria-hidden="true">↗</span></Link>
               </div>
               <article className="production-feature">
                 <div className="reel-cover-wrap">
@@ -51,7 +51,7 @@ export function HomePage() {
                   <h3>El café que despierta ideas</h3>
                   <p className="campaign-description">Una pausa breve, contada desde el origen.</p>
 
-                  <div className="production-progress" aria-label="Progreso de la campaña: 3 de 4 etapas">
+                  <div className="production-progress" aria-label="Progreso de la pieza: 3 de 4 etapas">
                     <div className="progress-fill"></div>
                   </div>
                   <ol className="stage-list">
@@ -89,7 +89,7 @@ export function HomePage() {
                   <span className="schedule-state"><i></i>Programada</span>
                 </li>
               </ul>
-              <a className="text-link" href="/calendario">Ver calendario completo <span aria-hidden="true">↗</span></a>
+              <Link className="text-link" to="/calendario">Ver calendario completo <span aria-hidden="true">↗</span></Link>
             </section>
           </div>
 
@@ -114,7 +114,6 @@ export function HomePage() {
           </section>
 
           <footer className="page-footer"><span>Un espacio para dar forma a las ideas.</span><span>Prototipo visual · Nex</span></footer>
-        </div>
     </StudioShell>
   );
 }

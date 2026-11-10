@@ -1,5 +1,26 @@
-import { HeadContent, Outlet, Scripts, createRootRoute } from "@tanstack/react-router";
+import { HeadContent, Outlet, Scripts, createRootRoute, type ErrorComponentProps } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import "../styles.css";
+
+function NotFound() {
+  return (
+    <main className="not-found">
+      <h1>404</h1>
+      <p>Esta vista no existe en Nex.</p>
+      <Link to="/">Volver al inicio</Link>
+    </main>
+  );
+}
+
+function RootError({ error }: ErrorComponentProps) {
+  return (
+    <main className="root-error">
+      <h1>Algo salió mal</h1>
+      <p>{error instanceof Error ? error.message : String(error)}</p>
+      <Link to="/">Volver al inicio</Link>
+    </main>
+  );
+}
 
 function RootDocument() {
   return (
@@ -23,11 +44,13 @@ export const Route = createRootRoute({
       { name: "theme-color", content: "#101a14" },
       {
         name: "description",
-        content: "Nex, el espacio para organizar campañas, videos y publicaciones.",
+        content: "Nex, el espacio para organizar piezas, videos y publicaciones.",
       },
       { title: "Nex — Tu estudio de contenido" },
     ],
     links: [{ rel: "icon", href: "/assets/nex-mark.svg", type: "image/svg+xml" }],
   }),
   component: RootDocument,
+  notFoundComponent: NotFound,
+  errorComponent: RootError,
 });

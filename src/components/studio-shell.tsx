@@ -1,4 +1,6 @@
-import { Fragment, type ReactNode } from "react";
+import { Fragment, type ReactNode, useState, useEffect } from "react";
+import { Link } from "@tanstack/react-router";
+import { meFn, logoutFn } from "../lib/auth";
 
 type ViewKey = "inicio" | "calendario" | "biblioteca" | "cuentas" | "despliegues" | "ajustes";
 
@@ -12,13 +14,25 @@ const navigation: Array<{ key: ViewKey; label: string; href: string; icon: React
 ];
 
 export function StudioShell({ active, children }: { active: ViewKey; children: ReactNode }) {
+  const [user, setUser] = useState<{ name: string | null; email: string } | null>(null);
+
+  useEffect(() => {
+    meFn().then((u) => setUser(u as any)).catch(() => setUser(null));
+  }, []);
+
+  async function handleLogout() {
+    try { await logoutFn(); } catch {}
+    setUser(null);
+    window.location.href = "/login";
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar" aria-label="Navegación principal">
-        <a className="brand" href="/" aria-label="Nex, inicio">
+        <Link className="brand" to="/" aria-label="Nex, inicio">
           <svg className="brand-mark" viewBox="0 0 40 40" aria-hidden="true"><path d="M9 30 30 9M11 10l19 20M8 20h24" /><circle cx="9" cy="30" r="2.2" /><circle cx="30" cy="9" r="2.2" /><circle cx="30" cy="30" r="2.2" /></svg>
           <span>Nex</span>
-        </a>
+        </Link>
 
         <div className="workspace-switcher">
           <span className="workspace-monogram">P</span>
@@ -30,19 +44,24 @@ export function StudioShell({ active, children }: { active: ViewKey; children: R
           <p className="nav-label">Espacio</p>
           {navigation.map((item, index) => <Fragment key={item.key}>
             {index === 5 && <p className="nav-label nav-label-spaced">Preferencias</p>}
-            <a key={item.key} className={`nav-link${active === item.key ? " active" : ""}`} href={item.href} aria-label={item.label} title={item.label} aria-current={active === item.key ? "page" : undefined}>
+            <Link key={item.key} to={item.href} className="nav-link" activeProps={{ className: "nav-link active" }} activeOptions={{ exact: true }} aria-label={item.label} title={item.label}>
               <svg className="icon" viewBox="0 0 24 24" aria-hidden="true">{item.icon}</svg>
               <span>{item.label}</span>
-            </a>
+            </Link>
           </Fragment>)}
         </nav>
 
         <div className="sidebar-bottom">
-          <div className="cloud-status"><span className="status-dot" /><span>Prototipo visual</span></div>
+          <div className="cloud-status"><span className="status-dot" /><span>{user ? user.email : "Sin sesión"}</span></div>
           <div className="user-profile">
             <span className="avatar">P</span>
-            <span><strong>Pablo</strong><small>Mi estudio</small></span>
+            <span><strong>{user?.name ?? "Pablo"}</strong><small>Mi estudio</small></span>
           </div>
+          {user ? (
+            <button className="quiet-button" type="button" onClick={handleLogout}>Cerrar sesión</button>
+          ) : (
+            <Link className="quiet-button" to="/login">Iniciar sesión</Link>
+          )}
         </div>
       </aside>
 
@@ -52,7 +71,7 @@ export function StudioShell({ active, children }: { active: ViewKey; children: R
           <div className="topbar-actions">
             <div className="search-box search-box-inert" aria-label="Búsqueda disponible en una próxima versión">
               <svg className="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 5 5" /></svg>
-              <span>Buscar campañas, videos…</span>
+              <span>Buscar piezas, videos…</span>
               <kbd>⌘ K</kbd>
             </div>
             <span className="avatar avatar-top" aria-label="Perfil de Pablo">P</span>

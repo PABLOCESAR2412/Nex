@@ -2,9 +2,9 @@
 
 ## Dirección
 
-Interfaz de operación para un estudio personal de contenido. La base es un panel de trabajo claro y familiar; la identidad viene de un tono editorial botánico: verde pino profundo, papel marfil y salvia. El guiño a una hoja de producción audiovisual aparece en una sola pieza: la línea de etapas que lleva una campaña desde el brief hasta su publicación.
+Interfaz de operación para un estudio personal de contenido. La base es un panel de trabajo claro y familiar; la identidad viene de un tono editorial botánico: verde pino profundo, papel marfil y salvia. El guiño a una hoja de producción audiovisual aparece en una sola pieza: la línea de etapas que lleva una pieza desde el brief hasta su publicación.
 
-La interfaz prioriza campañas, estado de revisión y calendario. No imita una consola ni un panel técnico. La referencia visual aprobada es el dashboard de estudio de contenido compartido por el usuario.
+La interfaz prioriza piezas, estado de revisión y calendario. No imita una consola ni un panel técnico. La referencia visual aprobada es el dashboard de estudio de contenido compartido por el usuario.
 
 ## Tokens
 
@@ -24,7 +24,7 @@ La interfaz prioriza campañas, estado de revisión y calendario. No imita una c
 
 ## Tipografía
 
-- Georgia para titulares y nombres de campañas: voz editorial y cálida.
+- Georgia para titulares y nombres de piezas: voz editorial y cálida.
 - Segoe UI para navegación, controles y datos: lectura compacta y nativa.
 - Evitar etiquetas en mayúsculas decorativas; reservarlas para la fecha y grupos de navegación.
 
@@ -61,6 +61,6 @@ La interfaz prioriza campañas, estado de revisión y calendario. No imita una c
 
 ## Evolución de diseño
 
-Las vistas de biblioteca, cuentas, calendario, ajustes y despliegues heredan esta paleta, tipografía y espaciado. Cada integración debe mostrar su estado (conectada, requiere atención o no configurada) en texto y en color, mantener las credenciales fuera de la interfaz pública y conservar la misma jerarquía entre campaña, archivo y destino.
+Las vistas de biblioteca, cuentas, calendario, ajustes y despliegues heredan esta paleta, tipografía y espaciado. Cada integración debe mostrar su estado (conectada, requiere atención o no configurada) en texto y en color, mantener las credenciales fuera de la interfaz pública y conservar la misma jerarquía entre pieza, archivo y destino.
 
 La navegación entre las seis vistas está activa. El resto de controles se mantiene deshabilitado hasta que exista el flujo correspondiente. Los datos de muestra se identifican como tales y deben reemplazarse por estados vacíos y datos reales antes de publicar Nex para usuarios.

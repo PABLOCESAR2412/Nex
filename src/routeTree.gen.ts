@@ -15,6 +15,8 @@ import { Route as BibliotecaRouteImport } from './routes/biblioteca'
 import { Route as CalendarioRouteImport } from './routes/calendario'
 import { Route as CuentasRouteImport } from './routes/cuentas'
 import { Route as DesplieguesRouteImport } from './routes/despliegues'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as ApiMcpRouteImport } from './routes/api/mcp'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -46,6 +48,16 @@ const DesplieguesRoute = DesplieguesRouteImport.update({
   path: '/despliegues',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMcpRoute = ApiMcpRouteImport.update({
+  id: '/api/mcp',
+  path: '/api/mcp',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -54,6 +66,8 @@ export interface FileRoutesByFullPath {
   '/calendario': typeof CalendarioRoute
   '/cuentas': typeof CuentasRoute
   '/despliegues': typeof DesplieguesRoute
+  '/login': typeof LoginRoute
+  '/api/mcp': typeof ApiMcpRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -62,6 +76,8 @@ export interface FileRoutesByTo {
   '/calendario': typeof CalendarioRoute
   '/cuentas': typeof CuentasRoute
   '/despliegues': typeof DesplieguesRoute
+  '/login': typeof LoginRoute
+  '/api/mcp': typeof ApiMcpRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -71,6 +87,8 @@ export interface FileRoutesById {
   '/calendario': typeof CalendarioRoute
   '/cuentas': typeof CuentasRoute
   '/despliegues': typeof DesplieguesRoute
+  '/login': typeof LoginRoute
+  '/api/mcp': typeof ApiMcpRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -81,6 +99,8 @@ export interface FileRouteTypes {
     | '/calendario'
     | '/cuentas'
     | '/despliegues'
+    | '/login'
+    | '/api/mcp'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -89,6 +109,8 @@ export interface FileRouteTypes {
     | '/calendario'
     | '/cuentas'
     | '/despliegues'
+    | '/login'
+    | '/api/mcp'
   id:
     | '__root__'
     | '/'
@@ -97,6 +119,8 @@ export interface FileRouteTypes {
     | '/calendario'
     | '/cuentas'
     | '/despliegues'
+    | '/login'
+    | '/api/mcp'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -106,6 +130,8 @@ export interface RootRouteChildren {
   CalendarioRoute: typeof CalendarioRoute
   CuentasRoute: typeof CuentasRoute
   DesplieguesRoute: typeof DesplieguesRoute
+  LoginRoute: typeof LoginRoute
+  ApiMcpRoute: typeof ApiMcpRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -152,6 +178,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DesplieguesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mcp': {
+      id: '/api/mcp'
+      path: '/api/mcp'
+      fullPath: '/api/mcp'
+      preLoaderRoute: typeof ApiMcpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -162,6 +202,8 @@ const rootRouteChildren: RootRouteChildren = {
   CalendarioRoute: CalendarioRoute,
   CuentasRoute: CuentasRoute,
   DesplieguesRoute: DesplieguesRoute,
+  LoginRoute: LoginRoute,
+  ApiMcpRoute: ApiMcpRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

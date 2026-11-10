@@ -8,3 +8,4 @@ graphify-out/
 .env.*
 !.env.example
 *.log
+worker-configuration.d.ts

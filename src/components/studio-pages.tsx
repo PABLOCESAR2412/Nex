@@ -1,4 +1,6 @@
+import { useState, useEffect } from "react";
 import { Icon, PageIntro, PrototypeNotice, StudioShell } from "./studio-shell";
+import { listContentFn, createContentFn } from "../lib/content";
 
 const weekDays = [
   { day: "Lun", date: "9 nov", today: true },
@@ -59,29 +61,62 @@ const assets = [
   { title: "Café de origen", description: "Una pausa breve, contada desde el origen.", type: "Video vertical", length: "0:58", channels: "Instagram · TikTok", state: "En revisión", cover: true },
   { title: "Historia del proyecto", description: "Cómo empezó el estudio y qué lo inspira.", type: "Guion", length: "6 escenas", channels: "YouTube", state: "Listo para producir" },
   { title: "Un minuto de productividad", description: "Tres ideas para cuidar el foco durante el día.", type: "Video vertical", length: "0:42", channels: "TikTok", state: "Programada" },
-  { title: "Notas de campaña · noviembre", description: "Referencias, tono y objetivos de contenido.", type: "Documento", length: "4 páginas", channels: "Uso interno", state: "Borrador" },
+  { title: "Notas de contenido · noviembre", description: "Referencias, tono y objetivos de contenido.", type: "Documento", length: "4 páginas", channels: "Uso interno", state: "Borrador" },
 ];
 
 export function LibraryPage() {
+  const [items, setItems] = useState<Array<{ id: string; title: string; description: string | null; type: string; state: string; channels: string | null }>>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    listContentFn()
+      .then((res) => { if (!cancelled) setItems(res as any); })
+      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : "Error"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  async function handleCreate(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim()) return;
+    setCreating(true);
+    try {
+      await createContentFn({ data: { title: title.trim(), type: "video" } });
+      setTitle("");
+      const res = await listContentFn();
+      setItems(res as any);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error");
+    } finally {
+      setCreating(false);
+    }
+  }
+
   return <StudioShell active="biblioteca">
     <PageIntro title="Biblioteca" subtitle="Videos, guiones y referencias de tu estudio." />
-    <PrototypeNotice />
-    <div className="library-toolbar">
-      <div className="library-search"><Icon><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 5 5" /></Icon><span>Buscar en tu biblioteca</span></div>
-      <div className="filter-group"><button type="button" disabled className="filter-chip active">Todo <span>04</span></button><button type="button" disabled className="filter-chip">Videos</button><button type="button" disabled className="filter-chip">Guiones</button><button type="button" disabled className="filter-chip">Referencias</button></div>
-      <button className="primary-button" type="button" disabled><Icon><path d="M12 5v14M5 12h14" /></Icon><span>Añadir archivo</span></button>
-    </div>
+    {error && <p className="prototype-notice">{error} — <a href="/login">Iniciar sesión</a></p>}
+    <form className="library-toolbar" onSubmit={handleCreate}>
+      <div className="library-search"><Icon><circle cx="10.8" cy="10.8" r="6.8" /><path d="m16 16 5 5" /></Icon><input placeholder="Título de la nueva pieza" value={title} onChange={(e) => setTitle(e.target.value)} /></div>
+      <div className="filter-group"><button type="button" disabled className="filter-chip active">Todo <span>{items.length}</span></button></div>
+      <button className="primary-button" type="submit" disabled={creating || !title.trim()}><Icon><path d="M12 5v14M5 12h14" /></Icon><span>{creating ? "Creando…" : "Añadir pieza"}</span></button>
+    </form>
     <PageSection title="Material reciente" detail="Ordenado por última actividad.">
-      <ul className="library-list">
-        {assets.map((asset, index) => <li className="library-row" key={asset.title}>
-          {asset.cover ? <img className="library-cover" src="/assets/cafe-cover.svg" alt="Portada ilustrativa de Café de origen" /> : <div className={`asset-monogram asset-monogram-${index}`} aria-hidden="true"><span>{asset.type === "Guion" ? "G" : asset.type === "Documento" ? "N" : "V"}</span></div>}
-          <div className="library-main"><div className="library-title-line"><h3>{asset.title}</h3><span className="asset-type">{asset.type}</span></div><p>{asset.description}</p><small>{asset.channels} <i>·</i> {asset.length}</small></div>
-          <div className="library-state"><span className={`state-mark state-${index}`} /><span>{asset.state}</span></div>
-          <button className="icon-button" type="button" disabled aria-label={`Opciones de ${asset.title}`}><Icon><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></Icon></button>
-        </li>)}
-      </ul>
+      {loading ? <p>Cargando…</p> : (
+        <ul className="library-list">
+          {items.length === 0 && <li className="library-row"><div className="library-main"><h3>Sin piezas aún</h3><p>Crea tu primera pieza arriba.</p></div></li>}
+          {items.map((asset, index) => <li className="library-row" key={asset.id}>
+            <div className={`asset-monogram asset-monogram-${index}`} aria-hidden="true"><span>{asset.type === "guion" ? "G" : asset.type === "documento" ? "N" : "V"}</span></div>
+            <div className="library-main"><div className="library-title-line"><h3>{asset.title}</h3><span className="asset-type">{asset.type}</span></div><p>{asset.description ?? "—"}</p><small>{asset.channels ?? "—"} <i>·</i> {asset.state}</small></div>
+            <div className="library-state"><span className={`state-mark state-${index % 4}`} /><span>{asset.state}</span></div>
+          </li>)}
+        </ul>
+      )}
     </PageSection>
-    <div className="library-footnote"><span>04 piezas</span><span>El almacenamiento se habilitará en una próxima versión.</span></div>
+    <div className="library-footnote"><span>{items.length} piezas</span><span>Almacenamiento en R2 y D1.</span></div>
   </StudioShell>;
 }
 
@@ -97,7 +132,7 @@ export function AccountsPage() {
     <PageIntro title="Cuentas" subtitle="Los destinos que forman parte de tu estudio." />
     <PrototypeNotice>Las cuentas de esta vista son ejemplos; no hay sesiones sociales conectadas.</PrototypeNotice>
     <section className="account-overview"><span className="overview-icon"><Icon><circle cx="9" cy="8" r="3" /><path d="M3 20v-1a6 6 0 0 1 12 0v1M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4.6V20" /></Icon></span><div><strong>Destinos sociales</strong><p>Organiza las cuentas donde aparecerá cada pieza.</p></div><button className="primary-button" type="button" disabled><Icon><path d="M12 5v14M5 12h14" /></Icon><span>Conectar cuenta</span></button></section>
-    <PageSection title="Canales del estudio" detail="Una misma campaña puede preparar contenido para varios destinos.">
+    <PageSection title="Canales del estudio" detail="Una misma pieza puede preparar contenido para varios destinos.">
       <ul className="account-list">
         {accounts.map((account, index) => <li className="account-row" key={`${account.platform}-${account.handle}`}><div className={`account-social account-social-${account.platform.toLowerCase()}`}><SocialIcon platform={account.platform} /></div><div className="account-identity"><strong>{account.handle}</strong><span>{account.platform} · {account.type}</span></div><div className="account-purpose">{account.note}</div><span className={`account-status${index === 3 ? " account-status-muted" : ""}`}><i />{account.status}</span><button className="icon-button" type="button" disabled aria-label={`Opciones de ${account.handle}`}><Icon><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></Icon></button></li>)}
       </ul>
@@ -108,12 +143,12 @@ export function AccountsPage() {
 
 const deployments = [
   { name: "Estudio Nex", provider: "Cloudflare Pages", domain: "estudio-nex.example", branch: "main", time: "Hoy · 14:32", status: "Publicado · muestra", tone: "ready" },
-  { name: "Landing de campaña", provider: "Vercel", domain: "campana-nex.example", branch: "preview/social-launch", time: "Ayer · 18:06", status: "Vista previa · muestra", tone: "preview" },
+  { name: "Landing de lanzamiento", provider: "Vercel", domain: "campana-nex.example", branch: "preview/social-launch", time: "Ayer · 18:06", status: "Vista previa · muestra", tone: "preview" },
 ];
 
 export function DeploymentsPage() {
   return <StudioShell active="despliegues">
-    <PageIntro title="Despliegues" subtitle="Una vista de los sitios que acompañan tus campañas." />
+    <PageIntro title="Despliegues" subtitle="Una vista de los sitios que acompañan tus piezas." />
     <PrototypeNotice>Estos registros son ilustrativos. No se consulta ni publica en Cloudflare o Vercel.</PrototypeNotice>
     <div className="deployment-layout">
       <PageSection title="Proyectos" detail="Entornos de publicación de muestra." className="deployment-projects">
@@ -126,10 +161,10 @@ export function DeploymentsPage() {
           </li>)}
         </ul>
       </PageSection>
-      <aside className="deployment-aside"><span className="aside-orbit"><Icon><path d="M3 12h18M12 3v18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4" /></Icon></span><h2>Publicaciones con contexto</h2><p>En la siguiente etapa podrás revisar proveedor, rama, dominio y resultado junto a cada campaña.</p><button className="quiet-button" type="button" disabled>Configurar proveedor</button></aside>
+      <aside className="deployment-aside"><span className="aside-orbit"><Icon><path d="M3 12h18M12 3v18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4" /></Icon></span><h2>Publicaciones con contexto</h2><p>En la siguiente etapa podrás revisar proveedor, rama, dominio y resultado junto a cada pieza.</p><button className="quiet-button" type="button" disabled>Configurar proveedor</button></aside>
     </div>
     <PageSection title="Actividad reciente" detail="Historial de muestra; la actualización automática aún no está disponible.">
-      <ul className="activity-list"><li><span className="activity-mark" /><p><strong>Estudio Nex</strong> <span>publicación completada</span><small>Cloudflare Pages · Hoy a las 14:32</small></p></li><li><span className="activity-mark activity-mark-soft" /><p><strong>Landing de campaña</strong> <span>vista previa preparada</span><small>Vercel · Ayer a las 18:06</small></p></li></ul>
+      <ul className="activity-list"><li><span className="activity-mark" /><p><strong>Estudio Nex</strong> <span>publicación completada</span><small>Cloudflare Pages · Hoy a las 14:32</small></p></li><li><span className="activity-mark activity-mark-soft" /><p><strong>Landing de pieza</strong> <span>vista previa preparada</span><small>Vercel · Ayer a las 18:06</small></p></li></ul>
     </PageSection>
   </StudioShell>;
 }
@@ -146,7 +181,7 @@ export function SettingsPage() {
     <PrototypeNotice>Las preferencias se muestran como referencia y todavía no se guardan.</PrototypeNotice>
     <div className="settings-layout">
       <div className="settings-main">
-        <PageSection title="Tu estudio" detail="El espacio desde el que organizas tus campañas.">
+        <PageSection title="Tu estudio" detail="El espacio desde el que organizas tus piezas.">
           <div className="workspace-settings"><span className="workspace-monogram">P</span><div><strong>Mi estudio</strong><span>Espacio personal de Pablo</span></div><button className="quiet-button" type="button" disabled>Editar</button></div>
         </PageSection>
         <PageSection title="Preferencias" detail="Ajustes iniciales para ordenar tu contenido.">
