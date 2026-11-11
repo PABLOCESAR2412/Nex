@@ -24,7 +24,7 @@ export const listContentFn = createServerFn({ method: "GET" })
       .prepare("SELECT id, title, description, type, state, channels, asset_key, created_at, updated_at FROM content_items WHERE user_id = ? ORDER BY updated_at DESC")
       .bind(context.session.userId)
       .all<ContentItem>();
-    return (results ?? []).map((r) => ({ ...r }));
+    return (results ?? []).map((r: ContentItem) => ({ ...r }));
   });
 
 export const createContentFn = createServerFn({ method: "POST" })

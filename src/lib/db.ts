@@ -12,3 +12,16 @@ export function getAssets(): R2Bucket {
 export function newId(): string {
   return crypto.randomUUID();
 }
+
+// Types needed by Cloudflare Workers (provided by wrangler types)
+interface __BaseEnv_Env {
+  nex_db: D1Database;
+  nex_assets: R2Bucket;
+}
+
+declare module "cloudflare:workers" {
+  interface Env extends __BaseEnv_Env {}
+  interface Env extends __BaseEnv_Env {}
+  export interface D1Database {}
+  export interface R2Bucket {}
+}
