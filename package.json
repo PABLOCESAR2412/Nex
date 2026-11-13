@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "deploy": "wrangler deploy",
+    "deploy": "wrangler deploy && wrangler d1 migrations apply nex-db --remote",
     "deploy:local": "bun run build && bun run deploy",
     "cf-typegen": "wrangler types"
   },

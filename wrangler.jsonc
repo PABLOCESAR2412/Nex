@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "nex",
+  "account_id": "6fcab192a8cc2a3458247ef5c8108a07",
   "compatibility_date": "2026-11-09",
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",
@@ -8,8 +9,7 @@
   "d1_databases": [
     {
       "binding": "nex_db",
-      "database_name": "nex-db",
-      "database_id": "7b9b60fc-5255-42a3-835f-2ec0f05a393c"
+      "database_name": "nex-db"
     }
   ],
   "r2_buckets": [
