@@ -34,8 +34,8 @@ La interfaz prioriza piezas, estado de revisión y calendario. No imita una cons
 - Cabecera con ruta, búsqueda y perfil.
 - **Inicio:** encabezado y acción principal, resumen, producción y publicaciones próximas, calendario semanal.
 - **Calendario:** semana completa con navegación contextual, piezas por canal y lista de próximas publicaciones. En móvil, solo el tablero conserva desplazamiento horizontal.
-- **Biblioteca:** búsqueda y filtros en reposo, portada editorial para video, archivos agrupados por tipo y estado de producción.
-- **Cuentas:** canales sociales con nombre, uso y estado legible. Las cuentas de muestra se identifican como ejemplos y no como sesiones conectadas.
+- **Biblioteca:** edición de piezas, archivos, guiones, estados de producción y fechas de publicación.
+- **Cuentas:** Instagram conectado desde OAuth con estado y acción para desconectar; TikTok y YouTube muestran que aún no están conectados.
 - **Despliegues:** proyectos de Cloudflare y Vercel en una lista de actividad y contexto de publicación; dominios `.example` son ilustrativos.
 - **Ajustes:** identidad del estudio, preferencias previstas y notificaciones, con controles en reposo hasta implementar persistencia.
 - Separadores finos organizan grupos; evitar una cuadrícula de tarjetas idénticas.
@@ -54,7 +54,7 @@ La interfaz prioriza piezas, estado de revisión y calendario. No imita una cons
 
 - El punto de progreso indica la etapa actual; los pasos completos llevan un check y texto «Listo».
 - Estado de publicación combina texto y punto, nunca solo color.
-- Los controles de esta entrega están deshabilitados porque el prototipo no contiene lógica.
+- La biblioteca y el calendario tienen estados de carga, vacío y error; acciones como guardar, subir, programar y eliminar deben comunicar su resultado.
 - Mantener foco de teclado visible, objetivos cómodos y contraste suficiente.
 - En móvil, las áreas de trabajo pasan a una columna; el calendario conserva siete columnas con desplazamiento horizontal propio.
 - Respetar `prefers-reduced-motion`.
@@ -63,4 +63,4 @@ La interfaz prioriza piezas, estado de revisión y calendario. No imita una cons
 
 Las vistas de biblioteca, cuentas, calendario, ajustes y despliegues heredan esta paleta, tipografía y espaciado. Cada integración debe mostrar su estado (conectada, requiere atención o no configurada) en texto y en color, mantener las credenciales fuera de la interfaz pública y conservar la misma jerarquía entre pieza, archivo y destino.
 
-La navegación entre las seis vistas está activa. El resto de controles se mantiene deshabilitado hasta que exista el flujo correspondiente. Los datos de muestra se identifican como tales y deben reemplazarse por estados vacíos y datos reales antes de publicar Nex para usuarios.
+La biblioteca, la carga de archivos, la revisión de piezas y la programación interna usan datos persistidos. Instagram muestra la cuenta real y permite publicar Reels aprobados con confirmación. TikTok, YouTube, los despliegues y las preferencias siguen pendientes; las vistas deben indicar ese estado sin datos de muestra que parezcan conectados.

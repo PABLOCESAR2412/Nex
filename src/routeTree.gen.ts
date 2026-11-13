@@ -17,6 +17,13 @@ import { Route as CuentasRouteImport } from './routes/cuentas'
 import { Route as DesplieguesRouteImport } from './routes/despliegues'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ApiMcpRouteImport } from './routes/api/mcp'
+import { Route as ApiContentIdAssetRouteImport } from './routes/api/content.$id.asset'
+import { Route as ApiContentIdUploadRouteImport } from './routes/api/content.$id.upload'
+import { Route as ApiSocialInstagramCallbackRouteImport } from './routes/api.social.instagram.callback'
+import { Route as ApiSocialInstagramConnectRouteImport } from './routes/api.social.instagram.connect'
+import { Route as ApiSocialInstagramDisconnectRouteImport } from './routes/api.social.instagram.disconnect'
+import { Route as ApiSocialInstagramPublishRouteImport } from './routes/api.social.instagram.publish'
+import { Route as ApiSocialInstagramMediaTokenRouteImport } from './routes/api.social.instagram.media.$token'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -58,6 +65,46 @@ const ApiMcpRoute = ApiMcpRouteImport.update({
   path: '/api/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiContentIdAssetRoute = ApiContentIdAssetRouteImport.update({
+  id: '/api/content/$id/asset',
+  path: '/api/content/$id/asset',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiContentIdUploadRoute = ApiContentIdUploadRouteImport.update({
+  id: '/api/content/$id/upload',
+  path: '/api/content/$id/upload',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSocialInstagramCallbackRoute =
+  ApiSocialInstagramCallbackRouteImport.update({
+    id: '/api/social/instagram/callback',
+    path: '/api/social/instagram/callback',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiSocialInstagramConnectRoute =
+  ApiSocialInstagramConnectRouteImport.update({
+    id: '/api/social/instagram/connect',
+    path: '/api/social/instagram/connect',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiSocialInstagramDisconnectRoute =
+  ApiSocialInstagramDisconnectRouteImport.update({
+    id: '/api/social/instagram/disconnect',
+    path: '/api/social/instagram/disconnect',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiSocialInstagramPublishRoute =
+  ApiSocialInstagramPublishRouteImport.update({
+    id: '/api/social/instagram/publish',
+    path: '/api/social/instagram/publish',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiSocialInstagramMediaTokenRoute =
+  ApiSocialInstagramMediaTokenRouteImport.update({
+    id: '/api/social/instagram/media/$token',
+    path: '/api/social/instagram/media/$token',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -68,6 +115,13 @@ export interface FileRoutesByFullPath {
   '/despliegues': typeof DesplieguesRoute
   '/login': typeof LoginRoute
   '/api/mcp': typeof ApiMcpRoute
+  '/api/content/$id/asset': typeof ApiContentIdAssetRoute
+  '/api/content/$id/upload': typeof ApiContentIdUploadRoute
+  '/api/social/instagram/callback': typeof ApiSocialInstagramCallbackRoute
+  '/api/social/instagram/connect': typeof ApiSocialInstagramConnectRoute
+  '/api/social/instagram/disconnect': typeof ApiSocialInstagramDisconnectRoute
+  '/api/social/instagram/publish': typeof ApiSocialInstagramPublishRoute
+  '/api/social/instagram/media/$token': typeof ApiSocialInstagramMediaTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -78,6 +132,13 @@ export interface FileRoutesByTo {
   '/despliegues': typeof DesplieguesRoute
   '/login': typeof LoginRoute
   '/api/mcp': typeof ApiMcpRoute
+  '/api/content/$id/asset': typeof ApiContentIdAssetRoute
+  '/api/content/$id/upload': typeof ApiContentIdUploadRoute
+  '/api/social/instagram/callback': typeof ApiSocialInstagramCallbackRoute
+  '/api/social/instagram/connect': typeof ApiSocialInstagramConnectRoute
+  '/api/social/instagram/disconnect': typeof ApiSocialInstagramDisconnectRoute
+  '/api/social/instagram/publish': typeof ApiSocialInstagramPublishRoute
+  '/api/social/instagram/media/$token': typeof ApiSocialInstagramMediaTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -89,6 +150,13 @@ export interface FileRoutesById {
   '/despliegues': typeof DesplieguesRoute
   '/login': typeof LoginRoute
   '/api/mcp': typeof ApiMcpRoute
+  '/api/content/$id/asset': typeof ApiContentIdAssetRoute
+  '/api/content/$id/upload': typeof ApiContentIdUploadRoute
+  '/api/social/instagram/callback': typeof ApiSocialInstagramCallbackRoute
+  '/api/social/instagram/connect': typeof ApiSocialInstagramConnectRoute
+  '/api/social/instagram/disconnect': typeof ApiSocialInstagramDisconnectRoute
+  '/api/social/instagram/publish': typeof ApiSocialInstagramPublishRoute
+  '/api/social/instagram/media/$token': typeof ApiSocialInstagramMediaTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -101,6 +169,13 @@ export interface FileRouteTypes {
     | '/despliegues'
     | '/login'
     | '/api/mcp'
+    | '/api/content/$id/asset'
+    | '/api/content/$id/upload'
+    | '/api/social/instagram/callback'
+    | '/api/social/instagram/connect'
+    | '/api/social/instagram/disconnect'
+    | '/api/social/instagram/publish'
+    | '/api/social/instagram/media/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -111,6 +186,13 @@ export interface FileRouteTypes {
     | '/despliegues'
     | '/login'
     | '/api/mcp'
+    | '/api/content/$id/asset'
+    | '/api/content/$id/upload'
+    | '/api/social/instagram/callback'
+    | '/api/social/instagram/connect'
+    | '/api/social/instagram/disconnect'
+    | '/api/social/instagram/publish'
+    | '/api/social/instagram/media/$token'
   id:
     | '__root__'
     | '/'
@@ -121,6 +203,13 @@ export interface FileRouteTypes {
     | '/despliegues'
     | '/login'
     | '/api/mcp'
+    | '/api/content/$id/asset'
+    | '/api/content/$id/upload'
+    | '/api/social/instagram/callback'
+    | '/api/social/instagram/connect'
+    | '/api/social/instagram/disconnect'
+    | '/api/social/instagram/publish'
+    | '/api/social/instagram/media/$token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -132,6 +221,13 @@ export interface RootRouteChildren {
   DesplieguesRoute: typeof DesplieguesRoute
   LoginRoute: typeof LoginRoute
   ApiMcpRoute: typeof ApiMcpRoute
+  ApiContentIdAssetRoute: typeof ApiContentIdAssetRoute
+  ApiContentIdUploadRoute: typeof ApiContentIdUploadRoute
+  ApiSocialInstagramCallbackRoute: typeof ApiSocialInstagramCallbackRoute
+  ApiSocialInstagramConnectRoute: typeof ApiSocialInstagramConnectRoute
+  ApiSocialInstagramDisconnectRoute: typeof ApiSocialInstagramDisconnectRoute
+  ApiSocialInstagramPublishRoute: typeof ApiSocialInstagramPublishRoute
+  ApiSocialInstagramMediaTokenRoute: typeof ApiSocialInstagramMediaTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -192,6 +288,55 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMcpRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/content/$id/asset': {
+      id: '/api/content/$id/asset'
+      path: '/api/content/$id/asset'
+      fullPath: '/api/content/$id/asset'
+      preLoaderRoute: typeof ApiContentIdAssetRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/content/$id/upload': {
+      id: '/api/content/$id/upload'
+      path: '/api/content/$id/upload'
+      fullPath: '/api/content/$id/upload'
+      preLoaderRoute: typeof ApiContentIdUploadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/social/instagram/callback': {
+      id: '/api/social/instagram/callback'
+      path: '/api/social/instagram/callback'
+      fullPath: '/api/social/instagram/callback'
+      preLoaderRoute: typeof ApiSocialInstagramCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/social/instagram/connect': {
+      id: '/api/social/instagram/connect'
+      path: '/api/social/instagram/connect'
+      fullPath: '/api/social/instagram/connect'
+      preLoaderRoute: typeof ApiSocialInstagramConnectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/social/instagram/disconnect': {
+      id: '/api/social/instagram/disconnect'
+      path: '/api/social/instagram/disconnect'
+      fullPath: '/api/social/instagram/disconnect'
+      preLoaderRoute: typeof ApiSocialInstagramDisconnectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/social/instagram/publish': {
+      id: '/api/social/instagram/publish'
+      path: '/api/social/instagram/publish'
+      fullPath: '/api/social/instagram/publish'
+      preLoaderRoute: typeof ApiSocialInstagramPublishRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/social/instagram/media/$token': {
+      id: '/api/social/instagram/media/$token'
+      path: '/api/social/instagram/media/$token'
+      fullPath: '/api/social/instagram/media/$token'
+      preLoaderRoute: typeof ApiSocialInstagramMediaTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -204,6 +349,13 @@ const rootRouteChildren: RootRouteChildren = {
   DesplieguesRoute: DesplieguesRoute,
   LoginRoute: LoginRoute,
   ApiMcpRoute: ApiMcpRoute,
+  ApiContentIdAssetRoute: ApiContentIdAssetRoute,
+  ApiContentIdUploadRoute: ApiContentIdUploadRoute,
+  ApiSocialInstagramCallbackRoute: ApiSocialInstagramCallbackRoute,
+  ApiSocialInstagramConnectRoute: ApiSocialInstagramConnectRoute,
+  ApiSocialInstagramDisconnectRoute: ApiSocialInstagramDisconnectRoute,
+  ApiSocialInstagramPublishRoute: ApiSocialInstagramPublishRoute,
+  ApiSocialInstagramMediaTokenRoute: ApiSocialInstagramMediaTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -1,11 +1,22 @@
 // src/lib/auth.ts
-import { createMiddleware, createServerFn } from "@tanstack/react-start";
+import { createMiddleware, createServerFn, createServerOnlyFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getDb, newId } from "./db";
 import { readSessionToken, setSessionCookie, clearSessionCookie } from "./session";
 import { hashPassword, verifyPassword } from "./password";
 
 export type Session = { id: string; userId: string };
+
+export const getCurrentSession = createServerOnlyFn(async (): Promise<Session | null> => {
+  const token = readSessionToken();
+  if (!token) return null;
+  const row = await getDb()
+    .prepare("SELECT id, user_id, expires_at FROM sessions WHERE id = ?")
+    .bind(token)
+    .first<{ id: string; user_id: string; expires_at: string }>();
+  if (!row || new Date(row.expires_at).getTime() <= Date.now()) return null;
+  return { id: row.id, userId: row.user_id };
+});
 
 export const authMiddleware = createMiddleware({ type: "function" }).server(async ({ next }) => {
   const token = readSessionToken();

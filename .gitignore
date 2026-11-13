@@ -7,5 +7,7 @@ graphify-out/
 .env
 .env.*
 !.env.example
+.dev.vars
+.dev.vars.*
 *.log
 worker-configuration.d.ts

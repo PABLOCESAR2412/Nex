@@ -6,13 +6,13 @@
 web
 
 ## Stack
-TanStack Start, React, TypeScript, Vite, Bun, Tailwind CSS, and Cloudflare Workers. The current delivery remains a visual prototype without application logic or external integrations.
+TanStack Start, React, TypeScript, Vite, Bun, Tailwind CSS, Cloudflare Workers, D1, and R2. The content library, private media storage, review states, internal scheduling, MCP content tools, Instagram professional-account OAuth, and confirmed Reel publishing are implemented. TikTok, YouTube, automatic scheduled publishing, deployment management, and preference persistence remain future work.
 
 ## Users
 The primary user is Pablo, working across personal and project social accounts to plan and manage AI-assisted content.
 
 ## Product Purpose
-Nex is intended to provide one place to organize video and campaign assets, review work, plan publication dates, and eventually publish to connected social accounts.
+Nex provides one place to organize video and campaign assets, review work, plan publication dates, and publish approved Reels to connected Instagram professional accounts.
 
 Nex is a cloud hub to prepare, review and schedule content, and to manage publications and deployments. The web application organizes the work; the harness (Hermes, OpenCode, etc.) provides the agents and tools that create the materials.
 
@@ -21,11 +21,11 @@ Nex is a cloud hub to prepare, review and schedule content, and to manage public
 2. The harness uses scripting, design and video skills to prepare the material and render it.
 3. The result is uploaded to Nex, where it is stored with its script, description, target platform and state.
 4. You review and approve it.
-5. Nex schedules it for the connected accounts and shows its status.
+5. Nex can publish an approved Reel to a connected Instagram account after explicit confirmation. Scheduled dates currently organize work in the calendar; they do not trigger automatic social publishing.
 
 ## Responsibilities
 - **Harness:** create and edit content through agents and skills; connect to Nex via MCP.
-- **Nex:** organize campaigns, videos, calendar, accounts, reviews, publications and deployments.
+- **Nex:** organize campaigns, videos, calendar, accounts, reviews, Instagram Reel publication and deployments.
 - **Cloudflare:** host the application and its API on Workers, store data in D1, store videos and files in R2, and run scheduled tasks.
 - **GitHub, Cloudflare and Vercel:** connect repositories and manage deployments from Nex.
 
@@ -39,8 +39,10 @@ Content generation can happen in a local or external harness; Nex is the cloud w
 The user expects to create videos with DeepSeek Harness and local tools, then store and manage the finished material in a web application. A dedicated VPS is not part of the initial hosting plan.
 
 ## Capabilities and Constraints
-- The current delivery is a visual prototype only. Navigation between Inicio, Calendario, Biblioteca, Cuentas, Despliegues and Ajustes works; search, account connections, uploads, scheduling, publishing, deployment actions and preference saving are not connected.
-- Cloudflare Workers is the intended initial host. Database, object storage, queues, social APIs, and deployment integrations remain future work.
+- Inicio reflects saved content and dates. Biblioteca supports content creation, editing, deletion, scripts, planned channels, review states, scheduling, and authenticated media uploads to R2. Calendario reads those dates and supports weekly navigation. MCP can list, create, and schedule items for the authenticated web session.
+- Instagram OAuth and confirmed Reel publishing are implemented when the Meta app configuration is present. TikTok and YouTube, automatic scheduled social publishing, deployment-provider actions, settings persistence, global search, and harness-specific API authentication are not connected.
+- Instagram publishing requires an approved piece with an MP4 or MOV video no larger than 1 GB and an Instagram professional account. It creates a short-lived public capability URL for Meta to fetch the private R2 asset; the URL expires after eight hours.
+- Cloudflare Workers, D1, and R2 are configured for the current product flow. Queues and external integrations remain future work.
 - Prototype metrics and campaign content are illustrative and must not be represented as live account data.
 
 ## Brand Commitments
@@ -64,9 +66,9 @@ The user-provided content-studio reference image is the visual reference. No rea
 - Ajustes: connections, permissions and preferences.
 
 ## Roadmap
-1. Connect storage and persistence (D1 + R2).
-2. Add MCP integration, account authorization and real scheduling.
-3. Respect official API permissions and requirements for Instagram, TikTok and YouTube.
+1. Apply migrations `0002_content_workflow.sql` and `0003_instagram_publishing.sql` to each D1 environment and complete the MCP-to-UI workflow; the local database has both applied.
+2. Connect TikTok and YouTube, then add automatic publishing for scheduled social posts.
+3. Add harness-specific credentials, then deployment-provider connections and saved workspace preferences.
 
 ## Design evolution
 Las vistas de biblioteca, cuentas, calendario, ajustes y despliegues heredan esta paleta, tipografía y espaciado. Cada integración debe mostrar su estado (conectada, requiere atención o no configurada) en texto y en color, mantener las credenciales fuera de la interfaz pública y conservar la misma jerarquía entre pieza, archivo y destino.
