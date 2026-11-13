@@ -1,7 +1,16 @@
 /// <reference types="vitest/globals" />
 import { render, screen, waitFor } from "@testing-library/react";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
+import { vi } from "vitest";
 import { routeTree } from "./routeTree.gen";
+
+vi.mock("./lib/auth", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./lib/auth")>();
+  return {
+    ...actual,
+    meFn: vi.fn().mockResolvedValue({ id: "test-user", name: "Pablo", email: "pablo@example.test" }),
+  };
+});
 
 function renderRoute(path: string) {
   const history = createMemoryHistory({ initialEntries: [path] });
@@ -24,7 +33,7 @@ describe("Nex views smoke", () => {
   });
   it("renders accounts", async () => {
     renderRoute("/cuentas");
-    await waitFor(() => expect(screen.getByRole("heading", { name: /cuentas/i })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: "Cuentas" })).toBeInTheDocument());
   });
   it("renders deployments", async () => {
     renderRoute("/despliegues");
