@@ -71,7 +71,7 @@ export function HomePage() {
       <Link className="primary-button" to="/biblioteca"><Icon><path d="M12 5v14M5 12h14" /></Icon><span>Crear pieza</span></Link>
     </section>
 
-    {error && <p className="content-feedback" role="alert">{error}{/unauthorized|inicia sesión/i.test(error) && <> — <a href="/login">Iniciar sesión</a></>}</p>}
+    {error && <p className="content-feedback" role="alert">{error}</p>}
 
     <section className="overview-strip" aria-label="Resumen del estudio">
       <div className="overview-item">
@@ -86,7 +86,6 @@ export function HomePage() {
         <span className="overview-icon"><Icon><path d="M4 5h16v14H4z" /><path d="M8 9h8M8 13h5" /></Icon></span>
         <span className="overview-label">Piezas totales</span><strong className="overview-value">{loading ? "—" : String(items.length).padStart(2, "0")}</strong>
       </div>
-      <p className="sample-note">Datos actualizados desde tu biblioteca</p>
     </section>
 
     <div className="work-grid">

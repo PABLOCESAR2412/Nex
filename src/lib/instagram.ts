@@ -3,27 +3,29 @@ import { getRuntimeEnv } from "./db";
 const textEncoder = new TextEncoder();
 const encryptionSalt = textEncoder.encode("nex-social-account-token-v1");
 
-export function instagramConfig() {
+export function instagramConfig(requestOrigin?: string) {
   const env = getRuntimeEnv();
   const appId = env.INSTAGRAM_APP_ID?.trim();
   const appSecret = env.INSTAGRAM_APP_SECRET?.trim();
   const encryptionSecret = env.INSTAGRAM_TOKEN_ENCRYPTION_KEY?.trim();
-  const publicAppUrl = env.PUBLIC_APP_URL?.trim().replace(/\/+$/, "");
-  if (!appId || !appSecret || !encryptionSecret || !publicAppUrl) {
-    throw new Error("Instagram requiere configurar INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET, INSTAGRAM_TOKEN_ENCRYPTION_KEY y PUBLIC_APP_URL.");
+  const publicAppUrl = env.PUBLIC_APP_URL?.trim().replace(/\/+$/, "") || requestOrigin?.trim().replace(/\/+$/, "") || "";
+  if (!appId || !appSecret || !encryptionSecret) {
+    throw new Error("Instagram requiere configurar INSTAGRAM_APP_ID, INSTAGRAM_APP_SECRET e INSTAGRAM_TOKEN_ENCRYPTION_KEY.");
   }
   if (textEncoder.encode(encryptionSecret).length < 32) {
     throw new Error("INSTAGRAM_TOKEN_ENCRYPTION_KEY debe tener al menos 32 bytes.");
   }
   const publicUrl = new URL(publicAppUrl);
-  if (publicUrl.pathname !== "/" || publicUrl.search || publicUrl.hash) {
-    throw new Error("PUBLIC_APP_URL debe ser solo el origen público de Nex.");
+  if (publicAppUrl) {
+    const publicUrl = new URL(publicAppUrl);
+    if (publicUrl.pathname !== "/" || publicUrl.search || publicUrl.hash) {
+      throw new Error("PUBLIC_APP_URL debe ser solo el origen público de Nex.");
+    }
+    if (publicUrl.protocol !== "https:" && publicUrl.hostname !== "localhost" && publicUrl.hostname !== "127.0.0.1") {
+      throw new Error("PUBLIC_APP_URL debe usar HTTPS.");
+    }
   }
-  if (publicUrl.protocol !== "https:" && publicUrl.hostname !== "localhost" && publicUrl.hostname !== "127.0.0.1") {
-    throw new Error("PUBLIC_APP_URL debe usar HTTPS.");
-  }
-  const graphVersion = env.INSTAGRAM_GRAPH_VERSION?.trim();
-  if (!graphVersion) throw new Error("Define INSTAGRAM_GRAPH_VERSION con una versión vigente de Meta.");
+  const graphVersion = env.INSTAGRAM_GRAPH_VERSION?.trim() || "v27.0";
   if (!/^v?\d+\.\d+$/.test(graphVersion)) throw new Error("INSTAGRAM_GRAPH_VERSION debe tener formato v27.0.");
   return {
     appId,
@@ -31,13 +33,13 @@ export function instagramConfig() {
     encryptionSecret,
     publicAppUrl,
     graphVersion: graphVersion.startsWith("v") ? graphVersion : "v" + graphVersion,
-    redirectUri: publicAppUrl + "/api/social/instagram/callback",
+    redirectUri: publicAppUrl ? publicAppUrl + "/api/social/instagram/callback" : "",
   };
 }
 
 export function isInstagramConfigured() {
   try {
-    instagramConfig();
+    instagramConfig("https://nex.invalid");
     return true;
   } catch {
     return false;

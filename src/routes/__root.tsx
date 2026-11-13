@@ -1,5 +1,6 @@
 import { HeadContent, Outlet, Scripts, createRootRoute, type ErrorComponentProps } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
+import { useEffect } from "react";
 import "../styles.css";
 
 function NotFound() {
@@ -23,6 +24,9 @@ function RootError({ error }: ErrorComponentProps) {
 }
 
 function RootDocument() {
+  useEffect(() => {
+    document.documentElement.dataset.theme = window.localStorage.getItem("nex-theme") === "light" ? "light" : "dark";
+  }, []);
   return (
     <html lang="es">
       <head>

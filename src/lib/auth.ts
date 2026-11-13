@@ -14,21 +14,19 @@ export const getCurrentSession = createServerOnlyFn(async (): Promise<Session | 
     .prepare("SELECT id, user_id, expires_at FROM sessions WHERE id = ?")
     .bind(token)
     .first<{ id: string; user_id: string; expires_at: string }>();
-  if (!row || new Date(row.expires_at).getTime() <= Date.now()) return null;
+  if (!row) return null;
+  if (new Date(row.expires_at).getTime() <= Date.now()) {
+    await getDb().prepare("DELETE FROM sessions WHERE id = ?").bind(row.id).run();
+    clearSessionCookie();
+    return null;
+  }
   return { id: row.id, userId: row.user_id };
 });
 
 export const authMiddleware = createMiddleware({ type: "function" }).server(async ({ next }) => {
-  const token = readSessionToken();
-  if (!token) throw new Error("Unauthorized");
-  const db = getDb();
-  const row = await db
-    .prepare("SELECT id, user_id, expires_at FROM sessions WHERE id = ?")
-    .bind(token)
-    .first<{ id: string; user_id: string; expires_at: string }>();
-  if (!row) throw new Error("Unauthorized");
-  if (new Date(row.expires_at) < new Date()) throw new Error("Unauthorized");
-  return next({ context: { session: { id: row.id, userId: row.user_id } as Session } });
+  const session = await getCurrentSession();
+  if (!session) throw new Error("Unauthorized");
+  return next({ context: { session } });
 });
 
 // Register
@@ -37,7 +35,7 @@ export const registerFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const db = getDb();
     const existing = await db.prepare("SELECT id FROM users WHERE email = ?").bind(data.email).first();
-    if (existing) throw new Error("Email already registered");
+    if (existing) throw new Error("Ese correo ya tiene una cuenta.");
     const id = newId();
     const passwordHash = await hashPassword(data.password);
     await db
@@ -92,12 +90,11 @@ export const logoutFn = createServerFn({ method: "POST" })
 
 // Current user
 export const meFn = createServerFn({ method: "GET" }).handler(async () => {
-  const token = readSessionToken();
-  if (!token) return null;
-  const db = getDb();
-  const row = await db
-    .prepare("SELECT u.id, u.email, u.name FROM users u JOIN sessions s ON s.user_id = u.id WHERE s.id = ?")
-    .bind(token)
+  const session = await getCurrentSession();
+  if (!session) return null;
+  const row = await getDb()
+    .prepare("SELECT id, email, name FROM users WHERE id = ?")
+    .bind(session.userId)
     .first<{ id: string; email: string; name: string | null }>();
   if (!row) return null;
   return row;

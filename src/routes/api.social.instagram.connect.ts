@@ -11,7 +11,7 @@ export const Route = createFileRoute("/api/social/instagram/connect")({
         if (!session) return Response.redirect(new URL("/login", request.url), 302);
 
         try {
-          const config = instagramConfig();
+          const config = instagramConfig(new URL(request.url).origin);
           const state = randomSecret();
           const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
           const db = getDb();
@@ -27,8 +27,9 @@ export const Route = createFileRoute("/api/social/instagram/connect")({
           authorization.searchParams.set("scope", "instagram_business_basic,instagram_business_content_publish");
           authorization.searchParams.set("state", state);
           return Response.redirect(authorization.toString(), 302);
-        } catch {
-          return Response.redirect(new URL("/cuentas?instagram=config", request.url), 302);
+        } catch (error) {
+          const status = error instanceof Error && /requiere configurar|debe tener al menos|debe ser solo el origen|debe usar HTTPS/.test(error.message) ? "config" : "error";
+          return Response.redirect(new URL("/cuentas?instagram=" + status, request.url), 302);
         }
       },
     },

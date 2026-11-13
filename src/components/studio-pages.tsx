@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "@tanstack/react-router";
 import { Icon, PageIntro, PrototypeNotice, StudioShell } from "./studio-shell";
 import { CONTENT_STATES, type ContentItem, type ContentState, createContentFn, deleteContentFn, listContentFn, updateContentFn } from "../lib/content";
 import { listInstagramAccountsFn, type InstagramAccountSummary } from "../lib/social";
@@ -50,7 +51,7 @@ export function CalendarPage() {
   const [items, setItems] = useState<ContentItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [weekOffset, setWeekOffset] = useState(0);
+  const [monthOffset, setMonthOffset] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,10 +63,13 @@ export function CalendarPage() {
   }, []);
 
   const today = new Date();
-  const weekStart = mondayOf(today);
-  weekStart.setDate(weekStart.getDate() + weekOffset * 7);
-  const days = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(weekStart);
+  const monthStart = new Date(today.getFullYear(), today.getMonth() + monthOffset, 1);
+  const gridStart = mondayOf(monthStart);
+  const daysInMonth = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
+  const dayOffset = (monthStart.getDay() + 6) % 7;
+  const cellCount = Math.max(35, Math.ceil((dayOffset + daysInMonth) / 7) * 7);
+  const days = Array.from({ length: cellCount }, (_, index) => {
+    const date = new Date(gridStart);
     date.setDate(date.getDate() + index);
     const key = dateKey(date);
     const events = items
@@ -73,40 +77,38 @@ export function CalendarPage() {
       .sort((a, b) => (a.scheduled_at ?? "").localeCompare(b.scheduled_at ?? ""));
     return { date, key, events };
   });
-  const weekEnd = days[6].date;
-  const weekLabel = `${weekStart.toLocaleDateString("es-EC", { day: "numeric", month: "short" })} — ${weekEnd.toLocaleDateString("es-EC", { day: "numeric", month: "short", year: "numeric" })}`;
+  const monthLabel = monthStart.toLocaleDateString("es-EC", { month: "long", year: "numeric" });
   const scheduled = items.filter((item) => item.scheduled_at).sort((a, b) => (a.scheduled_at ?? "").localeCompare(b.scheduled_at ?? ""));
 
   return <StudioShell active="calendario">
     <PageIntro title="Calendario" subtitle="Cada pieza en su momento, cada canal en su ritmo." />
-    <PrototypeNotice>Las fechas se guardan en tu biblioteca. La publicación automática llegará con las conexiones sociales.</PrototypeNotice>
-    {error && <p className="content-feedback" role="alert">{error}{/unauthorized|inicia sesión/i.test(error) && <> — <a href="/login">Iniciar sesión</a></>}</p>}
+    <PrototypeNotice>Las fechas y publicaciones programadas se cargan desde tu biblioteca.</PrototypeNotice>
+    {error && <p className="content-feedback" role="alert">{error}</p>}
     <section className="schedule-toolbar" aria-label="Controles del calendario">
-      <div className="view-switch" aria-label="Vista semanal seleccionada"><span className="selected">Semana</span></div>
+      <div className="view-switch" aria-label="Vista mensual seleccionada"><span className="selected">Mes</span></div>
       <div className="week-controls">
-        <button className="icon-button" type="button" onClick={() => setWeekOffset((value) => value - 1)} aria-label="Semana anterior"><Icon><path d="m15 18-6-6 6-6" /></Icon></button>
-        <strong>{weekLabel}</strong>
-        <button className="icon-button" type="button" onClick={() => setWeekOffset((value) => value + 1)} aria-label="Semana siguiente"><Icon><path d="m9 18 6-6-6-6" /></Icon></button>
+        <button className="icon-button" type="button" onClick={() => setMonthOffset((value) => value - 1)} aria-label="Mes anterior"><Icon><path d="m15 18-6-6 6-6" /></Icon></button>
+        <strong>{monthLabel}</strong>
+        <button className="icon-button" type="button" onClick={() => setMonthOffset((value) => value + 1)} aria-label="Mes siguiente"><Icon><path d="m9 18 6-6-6-6" /></Icon></button>
       </div>
-      <button className="quiet-button" type="button" onClick={() => setWeekOffset(0)}>Hoy</button>
+      <button className="quiet-button" type="button" onClick={() => setMonthOffset(0)}>Hoy</button>
     </section>
-    <div className="calendar-scroller">
-      <ol className="week-grid full-calendar" aria-label="Calendario semanal">
-        {days.map(({ date, key, events }) => <li className={`day-column${key === dateKey(today) ? " is-today" : ""}`} key={key}>
-          <div className="day-head"><strong>{date.toLocaleDateString("es-EC", { weekday: "short" })}</strong><span>{date.toLocaleDateString("es-EC", { day: "numeric", month: "short" })}</span></div>
-          {key === dateKey(today) && <span className="today-line">Hoy</span>}
-          {events.map((item) => {
+    <div className="calendar-scroller month-calendar-scroller">
+      <div className="month-weekdays" aria-hidden="true">{["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"].map((day) => <span key={day}>{day}</span>)}</div>
+      <ol className="month-grid" aria-label={`Calendario mensual de ${monthLabel}`}>
+        {days.map(({ date, key, events }) => <li className={`month-day${date.getMonth() !== monthStart.getMonth() ? " outside-month" : ""}${key === dateKey(today) ? " is-today" : ""}`} key={key}>
+          <span className="month-day-number">{date.getDate()}{key === dateKey(today) && <small>Hoy</small>}</span>
+          <div className="month-day-events">{events.slice(0, 3).map((item) => {
             const channel = item.channels?.split(/[·,]/)[0]?.trim() ?? "";
             const time = new Date(item.scheduled_at!).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" });
-            return <div className={`calendar-event ${channel ? `event-${channel.toLowerCase()}` : ""}`} key={item.id}>
-              {channel ? <SocialIcon platform={channel} /> : <Icon className="social-icon"><path d="M12 5v14M5 12h14" /></Icon>}
-              <span><b>{time}</b>{item.title}<small>{stateLabels[item.state as ContentState] ?? item.state}</small></span>
+            return <div className={`calendar-event month-event ${channel ? `event-${channel.toLowerCase()}` : ""}`} key={item.id} title={`${time} · ${item.title}`}>
+              <span><b>{time}</b>{item.title}</span>
             </div>;
-          })}
+          })}{events.length > 3 && <span className="month-more">+{events.length - 3} más</span>}</div>
         </li>)}
       </ol>
     </div>
-    <PageSection title="Publicaciones programadas" detail="Programa o cambia las fechas desde la biblioteca.">
+    <PageSection title="Publicaciones programadas" detail="El calendario organiza las fechas; la publicación en Instagram se confirma desde la biblioteca.">
       {loading ? <p>Cargando calendario…</p> : scheduled.length === 0 ? <p className="content-empty">Todavía no hay piezas programadas. Añade una fecha desde la biblioteca.</p> : <ul className="schedule-list">
         {scheduled.map((item) => {
           const date = new Date(item.scheduled_at!);
@@ -300,6 +302,7 @@ export function LibraryPage() {
   const [channels, setChannels] = useState("");
   const [creating, setCreating] = useState(false);
   const [instagramAccounts, setInstagramAccounts] = useState<InstagramAccountSummary[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
 
   async function refresh() {
     const result = await listContentFn();
@@ -319,6 +322,10 @@ export function LibraryPage() {
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    setSearchQuery(new URLSearchParams(window.location.search).get("q")?.trim() ?? "");
+  }, []);
+
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
@@ -336,31 +343,31 @@ export function LibraryPage() {
     }
   }
 
+  const visibleItems = searchQuery
+    ? items.filter((item) => `${item.title} ${item.description ?? ""} ${item.script ?? ""} ${item.channels ?? ""} ${item.asset_name ?? ""}`.toLocaleLowerCase().includes(searchQuery.toLocaleLowerCase()))
+    : items;
+
   return <StudioShell active="biblioteca">
     <PageIntro title="Biblioteca" subtitle="Videos, guiones y referencias de tu estudio." />
     {!loading && instagramAccounts.length === 0 && <p className="content-feedback">Para publicar un Reel, conecta una cuenta profesional desde <a href="/cuentas">Cuentas</a>.</p>}
-    {error && <p className="prototype-notice">{error}{/unauthorized|inicia sesión/i.test(error) && <> — <a href="/login">Iniciar sesión</a></>}</p>}
+    {error && <p className="prototype-notice" role="alert">{error}</p>}
     <form className="library-toolbar" onSubmit={handleCreate}>
       <div className="library-search"><Icon><path d="M12 5v14M5 12h14" /></Icon><input aria-label="Título de la nueva pieza" placeholder="Título de la nueva pieza" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={160} required /></div>
       <div className="library-search"><input aria-label="Canales previstos" placeholder="Canales previstos · Instagram, TikTok…" value={channels} onChange={(e) => setChannels(e.target.value)} maxLength={200} /></div>
       <button className="primary-button" type="submit" disabled={creating || !title.trim()}><Icon><path d="M12 5v14M5 12h14" /></Icon><span>{creating ? "Creando…" : "Añadir pieza"}</span></button>
     </form>
-    <PageSection title="Material reciente" detail="Ordenado por última actividad.">
+    <PageSection title={searchQuery ? "Resultados de búsqueda" : "Material reciente"} detail={searchQuery ? `Coincidencias para “${searchQuery}”.` : "Ordenado por última actividad."}>
       {loading ? <p>Cargando biblioteca…</p> : (
         <ul className="library-list">
           {items.length === 0 && <li className="content-empty">Todavía no hay piezas. Crea una arriba para guardar su guion, archivo y fecha.</li>}
-          {items.map((item) => <ContentEditor key={item.id} item={item} instagramAccounts={instagramAccounts} onChanged={refresh} onDeleted={async (cleanupPending) => { await refresh(); if (cleanupPending) setError("La pieza se eliminó; no se pudo borrar su archivo de R2."); }} />)}
+          {items.length > 0 && visibleItems.length === 0 && <li className="content-empty">No encontramos piezas que coincidan con esa búsqueda.</li>}
+          {visibleItems.map((item) => <ContentEditor key={item.id} item={item} instagramAccounts={instagramAccounts} onChanged={refresh} onDeleted={async (cleanupPending) => { await refresh(); if (cleanupPending) setError("La pieza se eliminó; no se pudo borrar su archivo de R2."); }} />)}
         </ul>
       )}
     </PageSection>
-    <div className="library-footnote"><span>{items.length} piezas</span><span>Datos en D1 · archivos privados en R2.</span></div>
+    <div className="library-footnote"><span>{searchQuery ? visibleItems.length : items.length} piezas{searchQuery ? " encontradas" : ""}</span><span>Tu biblioteca · archivos privados.</span></div>
   </StudioShell>;
 }
-
-const unconnectedAccounts = [
-  { platform: "TikTok", handle: "Sin conectar", type: "TikTok", status: "Sin conectar", note: "Publicación de videos próximamente" },
-  { platform: "YouTube", handle: "Sin conectar", type: "Canal", status: "Sin conectar", note: "Videos y Shorts próximamente" },
-];
 
 export function AccountsPage() {
   const [instagramAccounts, setInstagramAccounts] = useState<InstagramAccountSummary[]>([]);
@@ -394,12 +401,12 @@ export function AccountsPage() {
     const messages: Record<string, string> = {
       connected: "Cuenta de Instagram conectada.",
       denied: "No se concedieron los permisos de Instagram.",
-      config: "Configura la app de Meta antes de conectar Instagram.",
+      config: "Instagram todavía no está configurado. Revisa los datos de conexión de Meta más abajo.",
       expired: "La conexión venció. Vuelve a intentarlo.",
       invalid: "No se pudo validar la conexión.",
       token_error: "Instagram no entregó un token válido. Intenta conectar de nuevo.",
       profile_error: "No se pudo leer el perfil profesional de Instagram.",
-      error: "No se pudo completar la conexión con Instagram.",
+      error: "No se pudo completar la conexión. Revisa el callback, las migraciones y los registros del Worker.",
     };
     if (status && messages[status]) {
       setNotice(messages[status]);
@@ -425,84 +432,37 @@ export function AccountsPage() {
     }
   }
 
-  const accounts = [
-    ...instagramAccounts.map((account) => ({
-      id: account.id,
-      platform: "Instagram",
-      handle: account.handle,
-      type: "Cuenta profesional",
-      status: account.status === "conectada" ? "Conectada" : "Desconectada",
-      note: "Publicaciones y Reels",
-    })),
-    ...unconnectedAccounts,
-  ];
-
   return <StudioShell active="cuentas">
-    <PageIntro title="Cuentas" subtitle="Los destinos que forman parte de tu estudio." />
-    <PrototypeNotice>Instagram conecta cuentas profesionales y publica Reels. TikTok y YouTube todavía no están conectados.</PrototypeNotice>
+    <PageIntro title="Cuentas" subtitle="Conecta las cuentas profesionales donde publicarás tus piezas." />
     {notice && <p className="content-feedback" role="status">{notice}</p>}
-    {accountError && <p className="content-feedback" role="alert">{accountError}{/unauthorized|inicia sesión/i.test(accountError) && <> — <a href="/login">Iniciar sesión</a></>}</p>}
-    <section className="account-overview"><span className="overview-icon"><Icon><circle cx="9" cy="8" r="3" /><path d="M3 20v-1a6 6 0 0 1 12 0v1M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4.6V20" /></Icon></span><div><strong>Destinos sociales</strong><p>Organiza las cuentas donde aparecerá cada pieza.</p></div>{configured ? <a className="primary-button" href="/api/social/instagram/connect"><Icon><path d="M12 5v14M5 12h14" /></Icon><span>Conectar Instagram</span></a> : <button className="primary-button" type="button" disabled><Icon><path d="M12 5v14M5 12h14" /></Icon><span>Configurar Instagram</span></button>}</section>
-    {!configured && <p className="content-empty">Añade la app de Meta, su secreto y la clave de cifrado en la configuración de este Worker para activar OAuth.</p>}
-    <PageSection title="Canales del estudio" detail="Una misma pieza puede preparar contenido para varios destinos.">
-      <ul className="account-list">
-        {accounts.map((account, index) => <li className="account-row" key={`${account.platform}-${account.handle}`}><div className={`account-social account-social-${account.platform.toLowerCase()}`}><SocialIcon platform={account.platform} /></div><div className="account-identity"><strong>{account.handle}</strong><span>{account.platform} · {account.type}</span></div><div className="account-purpose">{account.note}</div><span className={`account-status${index === 3 ? " account-status-muted" : ""}`}><i />{account.status}</span><button className="icon-button" type="button" disabled aria-label={`Opciones de ${account.handle}`}><Icon><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></Icon></button></li>)}
-      </ul>
+    {accountError && <p className="content-feedback" role="alert">{accountError}</p>}
+    <section className="account-overview"><span className="overview-icon"><Icon><circle cx="9" cy="8" r="3" /><path d="M3 20v-1a6 6 0 0 1 12 0v1M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4.6V20" /></Icon></span><div><strong>Instagram</strong><p>Puedes conectar varias cuentas profesionales, una por una.</p></div>{configured ? <a className="primary-button" href="/api/social/instagram/connect"><Icon><path d="M12 5v14M5 12h14" /></Icon><span>{instagramAccounts.length ? "Añadir cuenta" : "Conectar Instagram"}</span></a> : <button className="primary-button" type="button" disabled><Icon><path d="M12 5v14M5 12h14" /></Icon><span>Conectar Instagram</span></button>}</section>
+    {!configured && <div className="social-config-note"><strong>Falta configurar la aplicación de Meta</strong><p>En los secretos del Worker añade <code>INSTAGRAM_APP_ID</code>, <code>INSTAGRAM_APP_SECRET</code> y <code>INSTAGRAM_TOKEN_ENCRYPTION_KEY</code>. La versión Graph usa <code>v27.0</code> si no defines una propia; <code>PUBLIC_APP_URL</code> es opcional.</p><p>Agrega esta URI exacta en el inicio de sesión de Instagram dentro de Meta: <code>{window.location.origin}/api/social/instagram/callback</code>.</p><p>En modo desarrollo, añade cada cuenta como tester de Instagram y acepta la invitación. Solo se admiten cuentas profesionales.</p></div>}
+    <PageSection title="Cuentas conectadas" detail="Cada autorización se guarda de forma independiente en tu estudio.">
+      {instagramAccounts.length === 0 ? <p className="content-empty">Aún no hay cuentas de Instagram conectadas.</p> : <ul className="account-list">
+        {instagramAccounts.map((account) => <li className="account-row" key={account.id}><div className="account-social account-social-instagram"><SocialIcon platform="Instagram" /></div><div className="account-identity"><strong>{account.handle}</strong><span>Instagram · Cuenta profesional</span></div><div className="account-purpose">Publicaciones y Reels</div><span className={`account-status${account.status !== "conectada" ? " account-status-muted" : ""}`}><i />{account.status === "conectada" ? "Conectada" : "Desconectada"}</span></li>)}
+      </ul>}
     </PageSection>
     {instagramAccounts.filter((account) => account.status === "conectada").map((account) => <div className="account-disconnect-row" key={account.id}><span>Token cifrado en D1 · autorización hasta {account.token_expires_at ? new Date(account.token_expires_at).toLocaleDateString("es-EC") : "sin fecha"}</span><button className="quiet-button" type="button" onClick={() => void disconnectInstagram(account)}>Desconectar {account.handle}</button></div>)}
     <div className="permission-note"><Icon><path d="M12 3 4 6v5c0 5 3.4 8 8 10 4.6-2 8-5 8-10V6z" /><path d="M9 12h6M12 9v6" /></Icon><p><strong>Permisos solicitados</strong><span>Instagram básico y publicación de contenido para leer la cuenta y publicar Reels cuando lo confirmes.</span></p></div>
   </StudioShell>;
 }
 
-const deployments = [
-  { name: "Estudio Nex", provider: "Cloudflare Pages", domain: "estudio-nex.example", branch: "main", time: "Hoy · 14:32", status: "Publicado · muestra", tone: "ready" },
-  { name: "Landing de lanzamiento", provider: "Vercel", domain: "campana-nex.example", branch: "preview/social-launch", time: "Ayer · 18:06", status: "Vista previa · muestra", tone: "preview" },
-];
-
 export function DeploymentsPage() {
   return <StudioShell active="despliegues">
-    <PageIntro title="Despliegues" subtitle="Una vista de los sitios que acompañan tus piezas." />
-    <PrototypeNotice>Estos registros son ilustrativos. No se consulta ni publica en Cloudflare o Vercel.</PrototypeNotice>
-    <div className="deployment-layout">
-      <PageSection title="Proyectos" detail="Entornos de publicación de muestra." className="deployment-projects">
-        <ul className="deployment-list">
-          {deployments.map((deployment) => <li className="deployment-row" key={deployment.name}>
-            <div className="deployment-symbol"><Icon>{deployment.provider === "Vercel" ? <><path d="M12 4 22 20H2z" /></> : <><path d="M12 3 2.8 19h18.4z" /><path d="M12 10v5M12 17h.01" /></>}</Icon></div>
-            <div className="deployment-main"><div className="deployment-title"><h3>{deployment.name}</h3><span>{deployment.provider}</span></div><span className="deployment-domain">{deployment.domain}</span><small>{deployment.branch} <i>·</i> {deployment.time}</small></div>
-            <span className={`deployment-status ${deployment.tone}`}><i />{deployment.status}</span>
-            <button className="quiet-button" type="button" disabled>Ver registro</button>
-          </li>)}
-        </ul>
-      </PageSection>
-      <aside className="deployment-aside"><span className="aside-orbit"><Icon><path d="M3 12h18M12 3v18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4" /></Icon></span><h2>Publicaciones con contexto</h2><p>En la siguiente etapa podrás revisar proveedor, rama, dominio y resultado junto a cada pieza.</p><button className="quiet-button" type="button" disabled>Configurar proveedor</button></aside>
-    </div>
-    <PageSection title="Actividad reciente" detail="Historial de muestra; la actualización automática aún no está disponible.">
-      <ul className="activity-list"><li><span className="activity-mark" /><p><strong>Estudio Nex</strong> <span>publicación completada</span><small>Cloudflare Pages · Hoy a las 14:32</small></p></li><li><span className="activity-mark activity-mark-soft" /><p><strong>Landing de pieza</strong> <span>vista previa preparada</span><small>Vercel · Ayer a las 18:06</small></p></li></ul>
-    </PageSection>
+    <PageIntro title="Despliegues" subtitle="Esta sección queda pendiente para otra etapa." />
+    <section className="deferred-panel"><span className="aside-orbit"><Icon><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4" /></Icon></span><h2>Lo veremos más adelante</h2><p>Por ahora Nex se enfoca en organizar el contenido y conectar tus redes sociales. Aquí aparecerán datos reales cuando activemos esta parte.</p><Link className="primary-button" to="/cuentas">Ir a cuentas sociales</Link></section>
   </StudioShell>;
 }
 
-const preferences = [
-  { title: "Zona horaria", value: "America/Guayaquil", help: "Se usará para mostrar las fechas y horas del calendario." },
-  { title: "Idioma del estudio", value: "Español", help: "Idioma de navegación y borradores de contenido." },
-  { title: "Formato habitual", value: "Vertical · 9:16", help: "Formato recomendado para Reels, TikTok y Shorts." },
-];
-
 export function SettingsPage() {
   return <StudioShell active="ajustes">
-    <PageIntro title="Ajustes" subtitle="Prepara el espacio de trabajo a tu manera." />
-    <PrototypeNotice>Las preferencias se muestran como referencia y todavía no se guardan.</PrototypeNotice>
-    <div className="settings-layout">
-      <div className="settings-main">
-        <PageSection title="Tu estudio" detail="El espacio desde el que organizas tus piezas.">
-          <div className="workspace-settings"><span className="workspace-monogram">P</span><div><strong>Mi estudio</strong><span>Espacio personal de Pablo</span></div><button className="quiet-button" type="button" disabled>Editar</button></div>
-        </PageSection>
-        <PageSection title="Preferencias" detail="Ajustes iniciales para ordenar tu contenido.">
-          <div className="preference-list">{preferences.map((preference) => <div className="preference-row" key={preference.title}><div><strong>{preference.title}</strong><p>{preference.help}</p></div><button className="select-like" type="button" disabled>{preference.value}<Icon><path d="m7 10 5 5 5-5" /></Icon></button></div>)}</div>
-        </PageSection>
-      </div>
-      <aside className="settings-aside"><h2>Notificaciones</h2><p>Elige qué novedades te gustaría recibir.</p><label className="setting-toggle"><span><strong>Revisión pendiente</strong><small>Cuando una pieza necesite tu aprobación.</small></span><input type="checkbox" disabled /></label><label className="setting-toggle"><span><strong>Publicación próxima</strong><small>Un recordatorio antes de la hora programada.</small></span><input type="checkbox" disabled /></label><div className="settings-hint">Los controles se activarán cuando el estudio pueda guardar tus preferencias.</div></aside>
-    </div>
-    <div className="settings-profile"><span className="avatar">P</span><div><strong>Pablo</strong><span>Perfil de muestra · sin cuenta conectada</span></div><button className="quiet-button" type="button" disabled>Gestionar perfil</button></div>
+    <PageIntro title="Ajustes" subtitle="Opciones de conexión y apariencia de tu estudio." />
+    <PageSection title="Apariencia" detail="El modo oscuro se abre por defecto. Puedes cambiarlo desde el botón de tema en la barra superior.">
+      <p className="settings-hint">La preferencia de tema se guarda en este navegador.</p>
+    </PageSection>
+    <PageSection title="Redes sociales" detail="Administra conexiones de Instagram y los permisos de publicación.">
+      <Link className="primary-button" to="/cuentas">Gestionar cuentas</Link>
+    </PageSection>
   </StudioShell>;
 }

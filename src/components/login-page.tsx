@@ -1,9 +1,7 @@
 import { useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
 import { loginFn, registerFn } from "../lib/auth";
 
 export function LoginPage() {
-  const navigate = useNavigate();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,9 +19,11 @@ export function LoginPage() {
       } else {
         await loginFn({ data: { email, password } });
       }
-      navigate({ to: "/" });
+      const requestedPath = new URLSearchParams(window.location.search).get("next");
+      const destination = requestedPath?.startsWith("/") && !requestedPath.startsWith("//") ? requestedPath : "/";
+      window.location.replace(destination);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error");
+      setError(err instanceof Error ? err.message : "No se pudo iniciar sesión.");
     } finally {
       setLoading(false);
     }

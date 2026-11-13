@@ -2,6 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { getCurrentSession } from "../lib/auth";
 import { getDb, getRuntimeEnv, newId } from "../lib/db";
 import { decryptInstagramToken, instagramConfig, instagramRequest, randomSecret, sha256Hex } from "../lib/instagram";
+import { getMcpUserId } from "../lib/mcp";
+import { createServerOnlyFn } from "@tanstack/react-start";
 
 type InstagramAccountRow = {
   id: string;
@@ -34,14 +36,10 @@ async function requestBody(request: Request) {
   try { return await request.json() as Record<string, unknown>; } catch { return null; }
 }
 
-export const Route = createFileRoute("/api/social/instagram/publish")({
-  server: {
-    handlers: {
-      POST: async ({ request }) => {
-        const session = await getCurrentSession();
-        if (!session) return fail("Inicia sesión para publicar.", 401);
+export const handleInstagramPublishRequest = createServerOnlyFn(async (request: Request, userId: string) => {
+        const session = { userId };
         let config;
-        try { config = instagramConfig(); } catch (error) { return fail(error instanceof Error ? error.message : "Instagram no está configurado.", 503); }
+        try { config = instagramConfig(new URL(request.url).origin); } catch (error) { return fail(error instanceof Error ? error.message : "Instagram no está configurado.", 503); }
         const input = await requestBody(request);
         if (input?.action === "start") {
           if (typeof input.contentId !== "string" || typeof input.accountId !== "string") return fail("Elige una pieza y una cuenta.");
@@ -193,6 +191,16 @@ export const Route = createFileRoute("/api/social/instagram/publish")({
         }
 
         return fail("Acción de publicación desconocida.");
+});
+
+export const Route = createFileRoute("/api/social/instagram/publish")({
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
+        const session = await getCurrentSession();
+        const userId = session?.userId ?? await getMcpUserId(request);
+        if (!userId) return fail("Conecta una sesión o una clave MCP válida para publicar.", 401);
+        return handleInstagramPublishRequest(request, userId);
       },
     },
   },
