@@ -1,6 +1,6 @@
 import { createServerFn, createServerOnlyFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { authMiddleware } from "./auth";
+import { authMiddleware, getCurrentSession } from "./auth";
 import { getDb, newId } from "./db";
 import { randomSecret, sha256Hex } from "./instagram";
 
@@ -24,6 +24,15 @@ export const getMcpUserId = createServerOnlyFn(async (request: Request) => {
   if (!token) return null;
   await db.prepare("UPDATE mcp_tokens SET last_used_at = datetime('now') WHERE id = ? AND revoked_at IS NULL").bind(token.id).run();
   return token.user_id;
+});
+
+/**
+ * Usuario de una petición HTTP: la sesión web (cookie) o, si no hay, una clave MCP.
+ * Lo usan las rutas que un harness también necesita (por ejemplo la subida de archivos).
+ */
+export const getRequestUserId = createServerOnlyFn(async (request: Request) => {
+  const session = await getCurrentSession();
+  return session?.userId ?? await getMcpUserId(request);
 });
 
 export const listMcpTokensFn = createServerFn({ method: "GET" })

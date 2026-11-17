@@ -4,6 +4,8 @@ import { getAssets, getDb, newId } from "../../lib/db";
 import { getMcpUserId } from "../../lib/mcp";
 import { handleInstagramPublishRequest } from "../api.social.instagram.publish";
 
+const MAX_URL_UPLOAD_BYTES = 1_000_000_000;
+
 const TOOLS = [
   {
     name: "list_content",
@@ -30,7 +32,7 @@ const TOOLS = [
   },
   {
     name: "upload_content_from_url",
-    description: "Carga un video MP4 o MOV desde una URL HTTPS pública y accesible sin inicio de sesión y lo adjunta a una pieza de Nex. No publica el video.",
+    description: "Carga un video MP4 o MOV desde una URL HTTPS pública y accesible sin inicio de sesión y lo adjunta a una pieza de Nex. El servidor de origen debe enviar Content-Length. Para un archivo local usa el script /nex-upload.mjs de este servidor (ver instrucciones). No publica el video.",
     inputSchema: {
       type: "object",
       properties: {
@@ -145,7 +147,7 @@ export const Route = createFileRoute("/api/mcp")({
             protocolVersion: "2025-11-25",
             capabilities: { tools: { listChanged: false } },
             serverInfo: { name: "nex", version: "1.0.0" },
-            instructions: "Nex gestiona piezas, calendario y cuentas sociales del usuario. Las publicaciones públicas requieren petición y confirmación explícitas del usuario.",
+            instructions: "Nex gestiona piezas, calendario y cuentas sociales del usuario. Las publicaciones públicas requieren petición y confirmación explícitas del usuario. Para adjuntar un archivo local a una pieza (cualquier tamaño hasta 5 GiB), descarga " + new URL(request.url).origin + "/nex-upload.mjs y ejecútalo con Node 18 o superior: NEX_URL=" + new URL(request.url).origin + " NEX_TOKEN=<la misma clave MCP> node nex-upload.mjs <content_id> <archivo>. Si el video ya está en una URL HTTPS pública usa upload_content_from_url.",
           });
         }
         if (method === "ping") return response(id, {});
@@ -203,21 +205,27 @@ export const Route = createFileRoute("/api/mcp")({
             const path = sourceUrl.pathname.toLowerCase();
             const assetType = headerType === "video/mp4" || path.endsWith(".mp4") ? "video/mp4" : headerType === "video/quicktime" || path.endsWith(".mov") ? "video/quicktime" : null;
             if (!assetType) return rpcError(id, -32602, "The URL must return an MP4 or MOV video.");
-            const contentLength = videoResponse.headers.get("content-length");
-            if (contentLength && Number(contentLength) > 1_000_000_000) return rpcError(id, -32602, "The video exceeds Nex's 1 GB upload limit.");
-            let uploadedSize = 0;
-            const limitedBody = videoResponse.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
-              transform(chunk, controller) {
-                uploadedSize += chunk.byteLength;
-                if (uploadedSize > 1_000_000_000) {
-                  controller.error(new Error("El video supera el máximo de 1 GB."));
-                  return;
-                }
-                controller.enqueue(chunk);
-              },
-            }));
+            const contentEncoding = videoResponse.headers.get("content-encoding")?.trim().toLowerCase();
+            if (contentEncoding && contentEncoding !== "identity") return rpcError(id, -32602, "The video host compresses the file. Use a direct file URL that is served without content encoding.");
+            const contentLength = Number(videoResponse.headers.get("content-length"));
+            if (!Number.isSafeInteger(contentLength) || contentLength < 1) {
+              return rpcError(id, -32602, "The video host must send a Content-Length header. For a local file use the server's /nex-upload.mjs script instead.");
+            }
+            if (contentLength > MAX_URL_UPLOAD_BYTES) return rpcError(id, -32602, "The video exceeds Nex's 1 GB upload limit.");
+            // R2 solo acepta streams de longitud conocida: FixedLengthStream la fija y falla si el host envía más o menos bytes.
+            const fixedLength = new FixedLengthStream(contentLength);
+            const copy = videoResponse.body.pipeTo(fixedLength.writable);
+            copy.catch(() => undefined); // evita un rechazo sin manejar si put() falla antes de esperar la copia
             const assetKey = "content/" + userId + "/" + content.id + "/" + newId();
-            await getAssets().put(assetKey, limitedBody, { httpMetadata: { contentType: assetType } });
+            let uploadedSize: number;
+            try {
+              const stored = await getAssets().put(assetKey, fixedLength.readable, { httpMetadata: { contentType: assetType } });
+              await copy;
+              uploadedSize = stored.size;
+            } catch (error) {
+              await getAssets().delete(assetKey).catch(() => undefined);
+              return toolResult(id, error instanceof Error ? "The video could not be stored: " + error.message : "The video could not be stored.", true);
+            }
             try {
               const updated = await getDb().prepare("UPDATE content_items SET asset_key = ?, asset_name = ?, asset_content_type = ?, asset_size = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?")
                 .bind(assetKey, filename, assetType, uploadedSize, content.id, userId)

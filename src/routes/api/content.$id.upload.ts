@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { getCurrentSession } from "../../lib/auth";
 import { getAssets, getDb, newId } from "../../lib/db";
+import { getRequestUserId } from "../../lib/mcp";
 
 const PART_SIZE = 8 * 1024 * 1024;
 const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024;
@@ -32,13 +32,13 @@ export const Route = createFileRoute("/api/content/$id/upload")({
   server: {
     handlers: {
       POST: async ({ request, params }) => {
-        const session = await getCurrentSession();
-        if (!session) return jsonError("Inicia sesión para subir archivos.", 401);
+        const userId = await getRequestUserId(request);
+        if (!userId) return jsonError("Inicia sesión o usa una clave MCP válida para subir archivos.", 401);
 
         const db = getDb();
         const content = await db
           .prepare("SELECT id FROM content_items WHERE id = ? AND user_id = ?")
-          .bind(params.id, session.userId)
+          .bind(params.id, userId)
           .first<{ id: string }>();
         if (!content) return jsonError("No se encontró la pieza.", 404);
 
@@ -67,7 +67,7 @@ export const Route = createFileRoute("/api/content/$id/upload")({
           const filename = input.filename.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 255);
           if (!filename) return jsonError("El archivo necesita un nombre válido.", 400);
 
-          const assetKey = `users/${session.userId}/content/${params.id}/${newId()}`;
+          const assetKey = `users/${userId}/content/${params.id}/${newId()}`;
           const upload = await getAssets().createMultipartUpload(assetKey, {
             httpMetadata: { contentType: input.contentType },
           });
@@ -75,7 +75,7 @@ export const Route = createFileRoute("/api/content/$id/upload")({
           try {
             await db
               .prepare("INSERT INTO content_uploads (id, content_id, user_id, asset_key, upload_id, filename, content_type, file_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-              .bind(uploadRowId, params.id, session.userId, assetKey, upload.uploadId, filename, input.contentType, input.size)
+              .bind(uploadRowId, params.id, userId, assetKey, upload.uploadId, filename, input.contentType, input.size)
               .run();
           } catch {
             await upload.abort().catch(() => undefined);
@@ -96,7 +96,7 @@ export const Route = createFileRoute("/api/content/$id/upload")({
           }
           const upload = await db
             .prepare("SELECT id, content_id, asset_key, upload_id, filename, content_type, file_size FROM content_uploads WHERE upload_id = ? AND content_id = ? AND user_id = ?")
-            .bind(input.uploadId, params.id, session.userId)
+            .bind(input.uploadId, params.id, userId)
             .first<PendingUpload>();
           if (!upload) return jsonError("La carga ya no existe o no te pertenece.", 404);
 
@@ -111,7 +111,7 @@ export const Route = createFileRoute("/api/content/$id/upload")({
 
           const current = await db
             .prepare("SELECT asset_key FROM content_items WHERE id = ? AND user_id = ?")
-            .bind(params.id, session.userId)
+            .bind(params.id, userId)
             .first<{ asset_key: string | null }>();
           if (!current) return jsonError("No se encontró la pieza.", 404);
 
@@ -126,8 +126,8 @@ export const Route = createFileRoute("/api/content/$id/upload")({
           try {
             const [result] = await db.batch([
               db.prepare("UPDATE content_items SET asset_key = ?, asset_name = ?, asset_content_type = ?, asset_size = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?")
-                .bind(upload.asset_key, upload.filename, upload.content_type, object.size, params.id, session.userId),
-              db.prepare("DELETE FROM content_uploads WHERE id = ? AND user_id = ?").bind(upload.id, session.userId),
+                .bind(upload.asset_key, upload.filename, upload.content_type, object.size, params.id, userId),
+              db.prepare("DELETE FROM content_uploads WHERE id = ? AND user_id = ?").bind(upload.id, userId),
             ]);
             if (!result.meta.changes) throw new Error("No se encontró la pieza.");
           } catch {
@@ -146,19 +146,19 @@ export const Route = createFileRoute("/api/content/$id/upload")({
           if (!uploadId) return jsonError("Falta el identificador de carga.", 400);
           const upload = await db
             .prepare("SELECT id, content_id, asset_key, upload_id, filename, content_type, file_size FROM content_uploads WHERE upload_id = ? AND content_id = ? AND user_id = ?")
-            .bind(uploadId, params.id, session.userId)
+            .bind(uploadId, params.id, userId)
             .first<PendingUpload>();
           if (!upload) return Response.json({ ok: true });
           try { await getAssets().resumeMultipartUpload(upload.asset_key, upload.upload_id).abort(); } catch {}
-          await db.prepare("DELETE FROM content_uploads WHERE id = ? AND user_id = ?").bind(upload.id, session.userId).run();
+          await db.prepare("DELETE FROM content_uploads WHERE id = ? AND user_id = ?").bind(upload.id, userId).run();
           return Response.json({ ok: true });
         }
 
         return jsonError("Acción de carga desconocida.", 400);
       },
       PUT: async ({ request, params }) => {
-        const session = await getCurrentSession();
-        if (!session) return jsonError("Inicia sesión para subir archivos.", 401);
+        const userId = await getRequestUserId(request);
+        if (!userId) return jsonError("Inicia sesión o usa una clave MCP válida para subir archivos.", 401);
 
         const url = new URL(request.url);
         if (request.method === "POST" && !["start", "complete", "abort"].includes(url.searchParams.get("action") ?? "")) {
@@ -172,7 +172,7 @@ export const Route = createFileRoute("/api/content/$id/upload")({
 
         const upload = await getDb()
           .prepare("SELECT id, content_id, asset_key, upload_id, filename, content_type, file_size FROM content_uploads WHERE upload_id = ? AND content_id = ? AND user_id = ?")
-          .bind(uploadId, params.id, session.userId)
+          .bind(uploadId, params.id, userId)
           .first<PendingUpload>();
         if (!upload) return jsonError("La carga ya no existe o no te pertenece.", 404);
         const partCount = Math.ceil(upload.file_size / PART_SIZE);
