@@ -27,3 +27,16 @@ export async function seedContent(db: D1Database, userId: string, fields: Partia
 export function bearer(token: string) {
   return { authorization: "Bearer " + token };
 }
+
+export async function seedSocialAccount(db: D1Database, userId: string, fields: Partial<{ platform: string; handle: string; externalId: string; status: string; ciphertext: string; iv: string; expiresAt: string | null }> = {}) {
+  const id = newId();
+  await db.prepare("INSERT INTO social_accounts (id, user_id, platform, handle, status, external_account_id, token_ciphertext, token_iv, token_expires_at, connected_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))")
+    .bind(id, userId, fields.platform ?? "Instagram", fields.handle ?? "@nex", fields.status ?? "conectada", fields.externalId ?? "ext-" + id.slice(0, 8), fields.ciphertext ?? null, fields.iv ?? null, fields.expiresAt ?? null)
+    .run();
+  return id;
+}
+
+/** Una pieza lista para publicar: aprobada y con un video MP4 adjunto. */
+export function approvedVideo() {
+  return { state: "aprobada", asset_key: "content/test/video", asset_name: "reel.mp4", asset_content_type: "video/mp4", asset_size: 1024 };
+}

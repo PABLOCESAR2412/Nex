@@ -2,7 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { getAssets, getDb, newId } from "../../lib/db";
 import { getMcpUserId } from "../../lib/mcp";
-import { handleInstagramPublishRequest } from "../api.social.instagram.publish";
+import { handleInstagramPublishRequest } from "../../lib/instagram-publish";
+import { cancelPublication, listPublications, schedulePublications } from "../../lib/publications";
 
 const MAX_URL_UPLOAD_BYTES = 1_000_000_000;
 
@@ -47,14 +48,42 @@ const TOOLS = [
   },
   {
     name: "schedule_content",
-    description: "Programa una pieza del usuario autenticado para una fecha futura en el calendario de Nex.",
+    description: "Programa una pieza para una fecha futura. Sin account_ids solo la coloca en el calendario de Nex. Con account_ids (de list_social_accounts) crea una publicación por cuenta que Nex lanzará sola a esa hora: la pieza debe estar aprobada en Nex por el usuario y tener un video MP4/MOV. Usa account_ids solo si el usuario pidió publicar en esas cuentas a esa hora.",
     inputSchema: {
       type: "object",
       properties: {
         id: { type: "string", description: "ID de la pieza devuelto por list_content o create_content." },
         scheduled_at: { type: "string", format: "date-time" },
+        account_ids: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 10, description: "IDs de cuentas conectadas (list_social_accounts). Si se omite, solo se agenda en el calendario." },
       },
       required: ["id", "scheduled_at"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+  },
+  {
+    name: "list_social_accounts",
+    description: "Lista las cuentas conectadas al estudio (Instagram y TikTok). Devuelve IDs para elegir cuentas al programar publicaciones.",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "list_publications",
+    description: "Lista las publicaciones programadas y su estado (programada, en_curso, publicada, borrador_enviado, fallida, requiere_revision o cancelada). Puede filtrarse por pieza.",
+    inputSchema: {
+      type: "object",
+      properties: { content_id: { type: "string" } },
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
+    name: "cancel_publication",
+    description: "Cancela una publicación programada que todavía no ha empezado.",
+    inputSchema: {
+      type: "object",
+      properties: { id: { type: "string", description: "ID devuelto por list_publications." } },
+      required: ["id"],
       additionalProperties: false,
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
@@ -244,12 +273,36 @@ export const Route = createFileRoute("/api/mcp")({
             if (typeof args.id !== "string" || !parsedDate.success) return rpcError(id, -32602, "A content ID and ISO date-time are required.");
             const date = new Date(parsedDate.data);
             if (!Number.isFinite(date.getTime()) || date.getTime() <= Date.now()) return rpcError(id, -32602, "The scheduled date must be in the future.");
+            if (args.account_ids !== undefined) {
+              const accountIds = z.array(z.string().min(1)).min(1).max(10).safeParse(args.account_ids);
+              if (!accountIds.success) return rpcError(id, -32602, "account_ids must list 1 to 10 account IDs from list_social_accounts.");
+              const publications = await schedulePublications(userId, { contentId: args.id, accountIds: accountIds.data, scheduledAt: date.toISOString() });
+              return toolResult(id, { ok: true, id: args.id, scheduled_at: date.toISOString(), publications });
+            }
+            // Solo calendario: una pieza ya aprobada conserva su estado para no perder la aprobación.
             const result = await getDb()
-              .prepare("UPDATE content_items SET state = 'programada', scheduled_at = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?")
+              .prepare("UPDATE content_items SET state = CASE WHEN state = 'aprobada' THEN 'aprobada' ELSE 'programada' END, scheduled_at = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?")
               .bind(date.toISOString(), args.id, userId)
               .run();
             if (!result.meta.changes) return rpcError(id, -32004, "Content item not found.");
             return toolResult(id, { ok: true, id: args.id, scheduled_at: date.toISOString() });
+          }
+
+          if (toolName === "list_social_accounts") {
+            const { results } = await getDb()
+              .prepare("SELECT id, platform, handle, status, token_expires_at FROM social_accounts WHERE user_id = ? AND external_account_id IS NOT NULL ORDER BY platform, connected_at DESC")
+              .bind(userId)
+              .all();
+            return toolResult(id, results ?? []);
+          }
+
+          if (toolName === "list_publications") {
+            return toolResult(id, await listPublications(userId, typeof args.content_id === "string" ? args.content_id : undefined));
+          }
+
+          if (toolName === "cancel_publication") {
+            if (typeof args.id !== "string") return rpcError(id, -32602, "A publication ID is required.");
+            return toolResult(id, await cancelPublication(userId, args.id));
           }
 
           if (toolName === "list_instagram_accounts") {

@@ -20,3 +20,15 @@ export const listInstagramAccountsFn = createServerFn({ method: "GET" })
       .all<InstagramAccountSummary>();
     return { configured: isInstagramConfigured(), accounts: results ?? [] };
   });
+
+export type SocialAccountSummary = InstagramAccountSummary & { platform: string };
+
+export const listSocialAccountsFn = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { results } = await getDb()
+      .prepare("SELECT id, platform, handle, status, connected_at, token_expires_at FROM social_accounts WHERE user_id = ? AND external_account_id IS NOT NULL ORDER BY platform, connected_at DESC")
+      .bind(context.session.userId)
+      .all<SocialAccountSummary>();
+    return { instagramConfigured: isInstagramConfigured(), accounts: results ?? [] };
+  });

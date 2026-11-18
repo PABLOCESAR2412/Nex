@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { Icon, PageIntro, PrototypeNotice, StudioShell } from "./studio-shell";
 import { CONTENT_STATES, type ContentItem, type ContentState, createContentFn, deleteContentFn, listContentFn, updateContentFn } from "../lib/content";
-import { listInstagramAccountsFn, type InstagramAccountSummary } from "../lib/social";
+import { listInstagramAccountsFn, listSocialAccountsFn, type InstagramAccountSummary, type SocialAccountSummary } from "../lib/social";
+import { PublicationsPanel } from "./publications-panel";
 
 const stateLabels: Record<ContentState, string> = {
   borrador: "Borrador",
@@ -123,7 +124,7 @@ export function CalendarPage() {
   </StudioShell>;
 }
 
-function ContentEditor({ item, instagramAccounts, onChanged, onDeleted }: { item: ContentItem; instagramAccounts: InstagramAccountSummary[]; onChanged: () => Promise<void>; onDeleted: (assetCleanupPending: boolean) => Promise<void> }) {
+function ContentEditor({ item, instagramAccounts, socialAccounts, onChanged, onDeleted }: { item: ContentItem; instagramAccounts: InstagramAccountSummary[]; socialAccounts: SocialAccountSummary[]; onChanged: () => Promise<void>; onDeleted: (assetCleanupPending: boolean) => Promise<void> }) {
   const [title, setTitle] = useState(item.title);
   const [description, setDescription] = useState(item.description ?? "");
   const [script, setScript] = useState(item.script ?? "");
@@ -284,6 +285,7 @@ function ContentEditor({ item, instagramAccounts, onChanged, onDeleted }: { item
           <button className="quiet-button delete-content-button" type="button" disabled={saving || uploading || publishing} onClick={() => void remove()}>Eliminar pieza</button>
         </div>
       </form>
+      <PublicationsPanel item={item} accounts={socialAccounts} onChanged={onChanged} />
       {uploading && <div className="upload-progress" role="status"><progress value={progress} max={100} />Subiendo archivo… {progress}%</div>}
       {message && <p className="content-feedback" role="status">{message}</p>}
       {item.asset_key && <div className="content-asset">
@@ -301,8 +303,9 @@ export function LibraryPage() {
   const [title, setTitle] = useState("");
   const [channels, setChannels] = useState("");
   const [creating, setCreating] = useState(false);
-  const [instagramAccounts, setInstagramAccounts] = useState<InstagramAccountSummary[]>([]);
+  const [socialAccounts, setSocialAccounts] = useState<SocialAccountSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const instagramAccounts = socialAccounts.filter((account) => account.platform === "Instagram");
 
   async function refresh() {
     const result = await listContentFn();
@@ -316,8 +319,8 @@ export function LibraryPage() {
       .then((result) => { if (!cancelled) setItems(result); })
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : "No se pudo cargar la biblioteca."); })
       .finally(() => { if (!cancelled) setLoading(false); });
-    listInstagramAccountsFn()
-      .then((result) => { if (!cancelled) setInstagramAccounts(result.accounts.filter((account) => account.status === "conectada")); })
+    listSocialAccountsFn()
+      .then((result) => { if (!cancelled) setSocialAccounts(result.accounts.filter((account) => account.status === "conectada")); })
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, []);
@@ -361,7 +364,7 @@ export function LibraryPage() {
         <ul className="library-list">
           {items.length === 0 && <li className="content-empty">Todavía no hay piezas. Crea una arriba para guardar su guion, archivo y fecha.</li>}
           {items.length > 0 && visibleItems.length === 0 && <li className="content-empty">No encontramos piezas que coincidan con esa búsqueda.</li>}
-          {visibleItems.map((item) => <ContentEditor key={item.id} item={item} instagramAccounts={instagramAccounts} onChanged={refresh} onDeleted={async (cleanupPending) => { await refresh(); if (cleanupPending) setError("La pieza se eliminó; no se pudo borrar su archivo de R2."); }} />)}
+          {visibleItems.map((item) => <ContentEditor key={item.id} item={item} instagramAccounts={instagramAccounts} socialAccounts={socialAccounts} onChanged={refresh} onDeleted={async (cleanupPending) => { await refresh(); if (cleanupPending) setError("La pieza se eliminó; no se pudo borrar su archivo de R2."); }} />)}
         </ul>
       )}
     </PageSection>
