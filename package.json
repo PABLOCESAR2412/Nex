@@ -10,16 +10,17 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "deploy": "wrangler deploy && wrangler d1 migrations apply nex-db --remote",
-    "deploy:local": "bun run build && bun run deploy",
+    "deploy": "wrangler d1 migrations apply nex-db --remote --profile nex-workers-builds && wrangler deploy --profile nex-workers-builds --keep-vars",
+    "deploy:local": "bun run build && wrangler d1 migrations apply nex-db --local && wrangler dev --local",
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
+    "@modelcontextprotocol/server": "^2.4.0",
     "@tanstack/react-router": "^1.169.3",
     "@tanstack/react-start": "^1.169.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "zod": "^3.24.0"
+    "zod": "^4.2.0"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.67.0",

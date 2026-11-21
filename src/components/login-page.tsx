@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { loginFn, registerFn } from "../lib/auth";
+import { safeInternalDestination } from "../lib/safe-next";
 
 export function LoginPage() {
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -20,8 +21,7 @@ export function LoginPage() {
         await loginFn({ data: { email, password } });
       }
       const requestedPath = new URLSearchParams(window.location.search).get("next");
-      const destination = requestedPath?.startsWith("/") && !requestedPath.startsWith("//") ? requestedPath : "/";
-      window.location.replace(destination);
+      window.location.replace(safeInternalDestination(requestedPath, window.location.origin));
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo iniciar sesión.");
     } finally {

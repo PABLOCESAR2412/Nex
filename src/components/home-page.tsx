@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Icon, StudioShell } from "./studio-shell";
+import { SkeletonRows } from "./loading-skeletons";
 import { listContentFn, type ContentItem, type ContentState } from "../lib/content";
 
 const stateLabels: Record<ContentState, string> = {
@@ -76,15 +77,15 @@ export function HomePage() {
     <section className="overview-strip" aria-label="Resumen del estudio">
       <div className="overview-item">
         <span className="overview-icon"><Icon><path d="M7 3h10a2 2 0 0 1 2 2v16H5V5a2 2 0 0 1 2-2Z" /><path d="M8 8h8M8 12h8M8 16h5" /></Icon></span>
-        <span className="overview-label">Por revisar</span><strong className="overview-value">{loading ? "—" : String(reviewCount).padStart(2, "0")}</strong>
+        <span className="overview-label">Por revisar</span><strong className="overview-value">{loading ? <span className="skeleton-pulse overview-value-skeleton" aria-hidden="true" /> : String(reviewCount).padStart(2, "0")}</strong>
       </div>
       <div className="overview-item">
         <span className="overview-icon"><Icon><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></Icon></span>
-        <span className="overview-label">Programadas</span><strong className="overview-value">{loading ? "—" : String(scheduled.length).padStart(2, "0")}</strong>
+        <span className="overview-label">Programadas</span><strong className="overview-value">{loading ? <span className="skeleton-pulse overview-value-skeleton" aria-hidden="true" /> : String(scheduled.length).padStart(2, "0")}</strong>
       </div>
       <div className="overview-item">
         <span className="overview-icon"><Icon><path d="M4 5h16v14H4z" /><path d="M8 9h8M8 13h5" /></Icon></span>
-        <span className="overview-label">Piezas totales</span><strong className="overview-value">{loading ? "—" : String(items.length).padStart(2, "0")}</strong>
+        <span className="overview-label">Piezas totales</span><strong className="overview-value">{loading ? <span className="skeleton-pulse overview-value-skeleton" aria-hidden="true" /> : String(items.length).padStart(2, "0")}</strong>
       </div>
     </section>
 
@@ -94,7 +95,7 @@ export function HomePage() {
           <div><h2 id="production-title">Producción en curso</h2><p>{featured ? stateLabels[featured.state as ContentState] ?? featured.state : "Tus piezas aparecerán aquí."}</p></div>
           <Link className="quiet-button" to="/biblioteca">Ver biblioteca <span aria-hidden="true">↗</span></Link>
         </div>
-        {featured ? <article className="production-feature">
+        {loading ? <div className="production-feature-skeleton" role="status" aria-label="Cargando producción" aria-busy="true"><span className="skeleton-pulse production-skeleton-cover" /><div><span className="skeleton-pulse production-skeleton-meta" /><span className="skeleton-pulse production-skeleton-title" /><span className="skeleton-pulse production-skeleton-copy" /><span className="skeleton-pulse production-skeleton-copy short" /><span className="skeleton-pulse production-skeleton-button" /></div></div> : featured ? <article className="production-feature">
           <div className="reel-cover-wrap home-reel-cover">
             {featured.asset_key && featured.asset_content_type?.startsWith("video/") ? <video className="reel-cover" src={`/api/content/${encodeURIComponent(featured.id)}/asset`} controls preload="metadata" /> : featured.asset_key && featured.asset_content_type?.startsWith("image/") ? <img className="reel-cover" src={`/api/content/${encodeURIComponent(featured.id)}/asset`} alt={featured.asset_name ?? featured.title} /> : <div className="home-asset-placeholder"><Icon><path d="M5 4h14v16H5z" /><path d="m9 10 2 2 4-4M8 16h8" /></Icon></div>}
           </div>
@@ -105,7 +106,7 @@ export function HomePage() {
             {featured.scheduled_at && <p className="content-feedback">Programada para {new Date(featured.scheduled_at).toLocaleString("es-EC", { dateStyle: "medium", timeStyle: "short" })}</p>}
             <Link className="review-button" to="/biblioteca">Abrir pieza</Link>
           </div>
-        </article> : <div className="home-empty-state">{loading ? "Cargando tus piezas…" : "Todavía no hay piezas. Crea la primera desde la biblioteca."} {!loading && <Link to="/biblioteca">Ir a la biblioteca</Link>}</div>}
+        </article> : <div className="home-empty-state">Todavía no hay piezas. Crea la primera desde la biblioteca. <Link to="/biblioteca">Ir a la biblioteca</Link></div>}
       </section>
 
       <section className="upcoming-section" aria-labelledby="upcoming-title">
@@ -113,8 +114,8 @@ export function HomePage() {
           <div><h2 id="upcoming-title">Próximas publicaciones</h2><p>Fechas que organizaste en el calendario.</p></div>
           <Link className="icon-button" to="/calendario" aria-label="Abrir calendario"><Icon><path d="m9 18 6-6-6-6" /></Icon></Link>
         </div>
-        <ul className="upcoming-list">
-          {loading ? <li className="home-empty-state">Cargando calendario…</li> : scheduled.length === 0 ? <li className="home-empty-state">No tienes publicaciones programadas. Puedes añadir una fecha en la biblioteca.</li> : scheduled.slice(0, 3).map((item) => {
+        {loading ? <SkeletonRows count={3} label="Cargando próximas publicaciones" variant="compact" /> : <ul className="upcoming-list">
+          {scheduled.length === 0 ? <li className="home-empty-state">No tienes publicaciones programadas. Puedes añadir una fecha en la biblioteca.</li> : scheduled.slice(0, 3).map((item) => {
             const date = new Date(item.scheduled_at!);
             return <li className="upcoming-item" key={item.id}>
               <span className="social-icon"><Icon><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></Icon></span>
@@ -122,7 +123,7 @@ export function HomePage() {
               <span className="schedule-state"><i />Programada</span>
             </li>;
           })}
-        </ul>
+        </ul>}
         <Link className="text-link" to="/calendario">Ver calendario completo <span aria-hidden="true">↗</span></Link>
       </section>
     </div>
@@ -132,11 +133,12 @@ export function HomePage() {
         <div><h2 id="calendar-title">Esta semana</h2><p>Tu ritmo de publicación.</p></div>
         <div className="week-controls"><span>{weekStart.toLocaleDateString("es-EC", { day: "numeric", month: "short" })} — {days[6].date.toLocaleDateString("es-EC", { day: "numeric", month: "short" })}</span><Link className="text-link" to="/calendario">Abrir</Link></div>
       </div>
-      <ol className="week-grid" aria-label="Calendario semanal de publicaciones">
+      <ol className="week-grid" aria-label="Calendario semanal de publicaciones" aria-busy={loading}>
         {days.map(({ date, events }) => <li className={`day-column${dayKey(date) === dayKey(today) ? " is-today" : ""}`} key={dayKey(date)}>
           <div className="day-head"><strong>{date.toLocaleDateString("es-EC", { weekday: "short" })}</strong><span>{date.toLocaleDateString("es-EC", { day: "numeric", month: "short" })}</span></div>
           {dayKey(date) === dayKey(today) && <div className="today-line">Hoy</div>}
           {events.map((item) => <div className="calendar-event" key={item.id}><Icon className="event-platform"><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M16 3v4M8 3v4M3 10h18" /></Icon><span><b>{new Date(item.scheduled_at!).toLocaleTimeString("es-EC", { hour: "2-digit", minute: "2-digit" })}</b>{item.title}</span></div>)}
+          {loading && <span className="skeleton-pulse week-event-skeleton" aria-hidden="true" />}
         </li>)}
       </ol>
     </section>

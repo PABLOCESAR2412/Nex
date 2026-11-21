@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { Icon, PageIntro, PrototypeNotice, StudioShell } from "./studio-shell";
+import { SkeletonRows } from "./loading-skeletons";
 import { CONTENT_STATES, type ContentItem, type ContentState, createContentFn, deleteContentFn, listContentFn, updateContentFn } from "../lib/content";
 import { listInstagramAccountsFn, type InstagramAccountSummary } from "../lib/social";
+import { listRegisteredUsersFn, type RegisteredUsersResult } from "../lib/user-admin-client";
 
 const stateLabels: Record<ContentState, string> = {
   borrador: "Borrador",
@@ -45,6 +47,44 @@ function SocialIcon({ platform }: { platform: string }) {
 
 function PageSection({ title, detail, children, className = "" }: { title: string; detail?: string; children: React.ReactNode; className?: string }) {
   return <section className={`page-section ${className}`}><div className="page-section-heading"><div><h2>{title}</h2>{detail && <p>{detail}</p>}</div></div>{children}</section>;
+}
+
+function formatRegisteredAt(value: string) {
+  const normalized = value.includes("T") ? value : `${value.replace(" ", "T")}Z`;
+  const date = new Date(normalized);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("es-EC", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function RegisteredUsersSection() {
+  const [directory, setDirectory] = useState<RegisteredUsersResult | null>(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    listRegisteredUsersFn()
+      .then((result) => { if (!cancelled) setDirectory(result); })
+      .catch(() => { if (!cancelled) setError(true); });
+    return () => { cancelled = true; };
+  }, []);
+
+  return <PageSection title="Usuarios registrados" detail="Directorio de solo lectura; el acceso está restringido a administradores.">
+    {error ? <p className="content-feedback" role="alert">No se pudo cargar el directorio de usuarios.</p>
+      : !directory ? <SkeletonRows count={3} label="Cargando usuarios registrados" variant="compact" />
+        : directory.status === "not_configured" ? <p className="settings-hint">Vista protegida y aún sin administrador configurado. Define <code>NEX_ADMIN_EMAILS</code> en las variables del Worker con el correo de inicio de sesión autorizado; admite varios correos separados por comas.</p>
+          : directory.status === "forbidden" ? <p className="content-empty">Esta cuenta no tiene permiso para consultar el directorio.</p>
+            : <>
+              <div className="users-directory-summary"><strong>{directory.total.toLocaleString("es-EC")}</strong><span>cuentas registradas</span></div>
+              {directory.users.length === 0 ? <p className="content-empty">Aún no hay usuarios registrados.</p> : <div className="users-table-wrap">
+                <table className="users-table">
+                  <thead><tr><th>Nombre</th><th>Correo</th><th>Registro</th><th>Sesiones activas</th></tr></thead>
+                  <tbody>{directory.users.map((user) => <tr key={user.email}>
+                    <td>{user.name?.trim() || "Sin nombre"}</td><td>{user.email}</td><td>{formatRegisteredAt(user.created_at)}</td><td>{user.active_sessions}</td>
+                  </tr>)}</tbody>
+                </table>
+              </div>}
+              {directory.truncated && <p className="settings-hint">Se muestran hasta 500 cuentas. Hay {directory.total.toLocaleString("es-EC")} en total.</p>}
+            </>}
+  </PageSection>;
 }
 
 export function CalendarPage() {
@@ -109,7 +149,7 @@ export function CalendarPage() {
       </ol>
     </div>
     <PageSection title="Publicaciones programadas" detail="El calendario organiza las fechas; la publicación en Instagram se confirma desde la biblioteca.">
-      {loading ? <p>Cargando calendario…</p> : scheduled.length === 0 ? <p className="content-empty">Todavía no hay piezas programadas. Añade una fecha desde la biblioteca.</p> : <ul className="schedule-list">
+      {loading ? <SkeletonRows count={3} label="Cargando publicaciones programadas" variant="compact" /> : scheduled.length === 0 ? <p className="content-empty">Todavía no hay piezas programadas. Añade una fecha desde la biblioteca.</p> : <ul className="schedule-list">
         {scheduled.map((item) => {
           const date = new Date(item.scheduled_at!);
           return <li className="schedule-row" key={item.id}>
@@ -357,7 +397,7 @@ export function LibraryPage() {
       <button className="primary-button" type="submit" disabled={creating || !title.trim()}><Icon><path d="M12 5v14M5 12h14" /></Icon><span>{creating ? "Creando…" : "Añadir pieza"}</span></button>
     </form>
     <PageSection title={searchQuery ? "Resultados de búsqueda" : "Material reciente"} detail={searchQuery ? `Coincidencias para “${searchQuery}”.` : "Ordenado por última actividad."}>
-      {loading ? <p>Cargando biblioteca…</p> : (
+      {loading ? <SkeletonRows count={3} label="Cargando biblioteca" /> : (
         <ul className="library-list">
           {items.length === 0 && <li className="content-empty">Todavía no hay piezas. Crea una arriba para guardar su guion, archivo y fecha.</li>}
           {items.length > 0 && visibleItems.length === 0 && <li className="content-empty">No encontramos piezas que coincidan con esa búsqueda.</li>}
@@ -372,10 +412,12 @@ export function LibraryPage() {
 export function AccountsPage() {
   const [instagramAccounts, setInstagramAccounts] = useState<InstagramAccountSummary[]>([]);
   const [configured, setConfigured] = useState(false);
+  const [accountsLoading, setAccountsLoading] = useState(true);
   const [accountError, setAccountError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   async function refreshAccounts() {
+    setAccountsLoading(true);
     try {
       const result = await listInstagramAccountsFn();
       setInstagramAccounts(result.accounts);
@@ -383,6 +425,8 @@ export function AccountsPage() {
       setAccountError(null);
     } catch (error) {
       setAccountError(error instanceof Error ? error.message : "No se pudieron cargar las cuentas.");
+    } finally {
+      setAccountsLoading(false);
     }
   }
 
@@ -396,7 +440,8 @@ export function AccountsPage() {
       })
       .catch((error) => {
         if (!cancelled) setAccountError(error instanceof Error ? error.message : "No se pudieron cargar las cuentas.");
-      });
+      })
+      .finally(() => { if (!cancelled) setAccountsLoading(false); });
     const status = new URLSearchParams(window.location.search).get("instagram");
     const messages: Record<string, string> = {
       connected: "Cuenta de Instagram conectada.",
@@ -436,14 +481,14 @@ export function AccountsPage() {
     <PageIntro title="Cuentas" subtitle="Conecta las cuentas profesionales donde publicarás tus piezas." />
     {notice && <p className="content-feedback" role="status">{notice}</p>}
     {accountError && <p className="content-feedback" role="alert">{accountError}</p>}
-    <section className="account-overview"><span className="overview-icon"><Icon><circle cx="9" cy="8" r="3" /><path d="M3 20v-1a6 6 0 0 1 12 0v1M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4.6V20" /></Icon></span><div><strong>Instagram</strong><p>Puedes conectar varias cuentas profesionales, una por una.</p></div>{configured ? <a className="primary-button" href="/api/social/instagram/connect"><Icon><path d="M12 5v14M5 12h14" /></Icon><span>{instagramAccounts.length ? "Añadir cuenta" : "Conectar Instagram"}</span></a> : <button className="primary-button" type="button" disabled><Icon><path d="M12 5v14M5 12h14" /></Icon><span>Conectar Instagram</span></button>}</section>
-    {!configured && <div className="social-config-note"><strong>Falta configurar la aplicación de Meta</strong><p>En los secretos del Worker añade <code>INSTAGRAM_APP_ID</code>, <code>INSTAGRAM_APP_SECRET</code> y <code>INSTAGRAM_TOKEN_ENCRYPTION_KEY</code>. La versión Graph usa <code>v27.0</code> si no defines una propia; <code>PUBLIC_APP_URL</code> es opcional.</p><p>Agrega esta URI exacta en el inicio de sesión de Instagram dentro de Meta: <code>{window.location.origin}/api/social/instagram/callback</code>.</p><p>En modo desarrollo, añade cada cuenta como tester de Instagram y acepta la invitación. Solo se admiten cuentas profesionales.</p></div>}
+    {accountsLoading ? <section className="account-overview account-overview-loading" role="status" aria-label="Cargando configuración de Instagram" aria-busy="true"><span className="overview-icon"><span className="skeleton-pulse overview-icon-skeleton" /></span><div><span className="skeleton-pulse account-overview-title-skeleton" /><span className="skeleton-pulse account-overview-copy-skeleton" /></div><span className="skeleton-pulse account-overview-button-skeleton" /></section> : <section className="account-overview"><span className="overview-icon"><Icon><circle cx="9" cy="8" r="3" /><path d="M3 20v-1a6 6 0 0 1 12 0v1M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4.6V20" /></Icon></span><div><strong>Instagram</strong><p>Puedes conectar varias cuentas profesionales, una por una.</p></div>{configured ? <a className="primary-button" href="/api/social/instagram/connect"><Icon><path d="M12 5v14M5 12h14" /></Icon><span>{instagramAccounts.length ? "Añadir cuenta" : "Conectar Instagram"}</span></a> : <button className="primary-button" type="button" disabled><Icon><path d="M12 5v14M5 12h14" /></Icon><span>Conectar Instagram</span></button>}</section>}
+    {!accountsLoading && !configured && <div className="social-config-note"><strong>Falta configurar la aplicación de Meta</strong><p>En los secretos del Worker añade <code>INSTAGRAM_APP_ID</code>, <code>INSTAGRAM_APP_SECRET</code> y <code>INSTAGRAM_TOKEN_ENCRYPTION_KEY</code>. La versión Graph usa <code>v27.0</code> si no defines una propia; <code>PUBLIC_APP_URL</code> es opcional.</p><p>Agrega esta URI exacta en el inicio de sesión de Instagram dentro de Meta: <code>{window.location.origin}/api/social/instagram/callback</code>.</p><p>En modo desarrollo, añade cada cuenta como tester de Instagram y acepta la invitación. Solo se admiten cuentas profesionales.</p></div>}
     <PageSection title="Cuentas conectadas" detail="Cada autorización se guarda de forma independiente en tu estudio.">
-      {instagramAccounts.length === 0 ? <p className="content-empty">Aún no hay cuentas de Instagram conectadas.</p> : <ul className="account-list">
+      {accountsLoading ? <SkeletonRows count={2} label="Cargando cuentas conectadas" variant="compact" /> : instagramAccounts.length === 0 ? <p className="content-empty">Aún no hay cuentas de Instagram conectadas.</p> : <ul className="account-list">
         {instagramAccounts.map((account) => <li className="account-row" key={account.id}><div className="account-social account-social-instagram"><SocialIcon platform="Instagram" /></div><div className="account-identity"><strong>{account.handle}</strong><span>Instagram · Cuenta profesional</span></div><div className="account-purpose">Publicaciones y Reels</div><span className={`account-status${account.status !== "conectada" ? " account-status-muted" : ""}`}><i />{account.status === "conectada" ? "Conectada" : "Desconectada"}</span></li>)}
       </ul>}
     </PageSection>
-    {instagramAccounts.filter((account) => account.status === "conectada").map((account) => <div className="account-disconnect-row" key={account.id}><span>Token cifrado en D1 · autorización hasta {account.token_expires_at ? new Date(account.token_expires_at).toLocaleDateString("es-EC") : "sin fecha"}</span><button className="quiet-button" type="button" onClick={() => void disconnectInstagram(account)}>Desconectar {account.handle}</button></div>)}
+    {!accountsLoading && instagramAccounts.filter((account) => account.status === "conectada").map((account) => <div className="account-disconnect-row" key={account.id}><span>Token cifrado en D1 · autorización hasta {account.token_expires_at ? new Date(account.token_expires_at).toLocaleDateString("es-EC") : "sin fecha"}</span><button className="quiet-button" type="button" onClick={() => void disconnectInstagram(account)}>Desconectar {account.handle}</button></div>)}
     <div className="permission-note"><Icon><path d="M12 3 4 6v5c0 5 3.4 8 8 10 4.6-2 8-5 8-10V6z" /><path d="M9 12h6M12 9v6" /></Icon><p><strong>Permisos solicitados</strong><span>Instagram básico y publicación de contenido para leer la cuenta y publicar Reels cuando lo confirmes.</span></p></div>
   </StudioShell>;
 }
@@ -464,5 +509,6 @@ export function SettingsPage() {
     <PageSection title="Redes sociales" detail="Administra conexiones de Instagram y los permisos de publicación.">
       <Link className="primary-button" to="/cuentas">Gestionar cuentas</Link>
     </PageSection>
+    <RegisteredUsersSection />
   </StudioShell>;
 }

@@ -64,13 +64,13 @@ Nex es un centro en la nube para preparar, revisar y programar contenido, ademá
 5. Nex lo programa para las cuentas conectadas y muestra su estado.
 
 ### Qué hace cada parte
-- **Harness:** crear y editar contenido mediante agentes y skills; conectarse a Nex por MCP.
+- **Asistentes:** crear borradores, cargar videos, consultar contenido y cuentas, programar fechas y publicar mediante MCP con autorización OAuth.
 - **Nex:** organizar piezas, guiones, archivos, estados de revisión y fechas en el calendario. El endpoint MCP permite listar, crear y programar piezas para la sesión autenticada.
 - **Instagram:** conectar una cuenta profesional con Instagram Login y publicar un Reel desde una pieza aprobada.
 - **Cloudflare:** alojar la aplicación y su API en Workers, guardar información en D1, almacenar videos y archivos en R2, y ejecutar tareas programadas.
 - **GitHub, Cloudflare y Vercel:** conectar repositorios y gestionar despliegues desde Nex.
 
-El render de video se ejecuta en el equipo donde corre el harness (Workers no es adecuado para renderizar videos pesados con HyperFrames y FFmpeg). Luego el resultado se sube a R2.
+El render de video se ejecuta en el equipo donde corre el harness (Workers no es adecuado para renderizar videos pesados con HyperFrames y FFmpeg). El harness puede transferir el video a R2 mediante las herramientas MCP multipart, sin que Nex descargue URLs de terceros.
 
 ## Organización
 
@@ -101,7 +101,21 @@ DESIGN.md            # sistema visual y reglas para futuras vistas
 PRODUCT.md           # alcance del producto y límites de esta fase
 ```
 
-Las fechas programadas se organizan dentro de Nex, pero todavía no disparan publicaciones automáticas. Para publicar en Instagram, la pieza debe estar aprobada, tener un video MP4 o MOV de hasta 1 GB y la persona debe confirmar la publicación en la biblioteca. La API está orientada a cuentas profesionales Business o Creator; consulta la [documentación de Instagram de Meta](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/). El acceso a Nex y al MCP usa la sesión web existente; la autenticación específica para un harness externo aún debe definirse.
+Las fechas programadas se organizan dentro de Nex, pero todavía no disparan publicaciones automáticas. Para publicar en Instagram, la pieza debe estar aprobada, tener un video MP4 o MOV de hasta 1 GB y la persona debe confirmar la publicación. La API está orientada a cuentas profesionales Business o Creator; consulta la [documentación de Instagram de Meta](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/).
+
+## Conectar asistentes por MCP
+
+El endpoint remoto es <code>https://&lt;dominio-publico-de-nex&gt;/api/mcp</code>. El servidor implementa MCP sobre HTTP, OAuth 2.1 con PKCE, registro dinámico de clientes, autorización por permisos y renovación/revocación de tokens. Los tokens se guardan como hashes en D1 y cada cliente muestra una pantalla de consentimiento al usuario. Los refresh tokens renuevan su vigencia por 30 días cada vez que se usan.
+
+- **Hermes:** en la cabecera de Nex, pulsa **Conectar MCP** y luego **Añadir Nex a Hermes**. Hermes abre Nex para iniciar sesión y autorizar los permisos.
+- **ChatGPT:** abre ChatGPT web, entra en **Ajustes → Apps o Plugins → Añadir servidor MCP personalizado**, pega la dirección MCP que Nex muestra en el mismo cuadro y elige OAuth. La primera autorización enlaza la cuenta Nex.
+- **Permisos:** `nex:read` consulta datos, `nex:write` crea borradores, programa fechas y carga videos, y `nex:publish` publica Reels confirmados y consulta su estado.
+- **Videos:** Hermes usa `start_video_upload`, `upload_video_part` y `complete_video_upload` para enviar MP4/MOV en partes de 8 MiB directamente a R2; tamaño máximo 1 GiB. No se descargan URLs arbitrarias. Si una carga se interrumpe, puede cancelarse con `abort_video_upload`.
+- **Perfiles:** `get_profile` devuelve un identificador estable para que ChatGPT reconozca la cuenta Nex conectada.
+
+ChatGPT habilita las conexiones MCP personalizadas desde web; las acciones de escritura requieren Business, Enterprise o Edu. Pro permite herramientas de lectura. Consulta los [requisitos actuales de ChatGPT](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt) antes de configurar la conexión.
+
+El despliegue configurado usa `bun run deploy`, que aplica las migraciones D1 remotas antes de publicar el Worker. La migración OAuth `0005_mcp_oauth.sql` también revoca los tokens Bearer antiguos para que las nuevas conexiones usen OAuth.
 
 ## Instagram
 

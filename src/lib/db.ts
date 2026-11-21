@@ -9,14 +9,20 @@ export function getAssets(): R2Bucket {
   return (env as { nex_assets: R2Bucket }).nex_assets;
 }
 
+export type RateLimitBinding = {
+  limit(options: { key: string }): Promise<{ success: boolean }>;
+};
+
 export type RuntimeEnv = {
   nex_db: D1Database;
   nex_assets: R2Bucket;
+  NEX_OAUTH_REGISTRATION_LIMITER?: RateLimitBinding;
   INSTAGRAM_APP_ID?: string;
   INSTAGRAM_APP_SECRET?: string;
   INSTAGRAM_TOKEN_ENCRYPTION_KEY?: string;
   INSTAGRAM_GRAPH_VERSION?: string;
   PUBLIC_APP_URL?: string;
+  NEX_ADMIN_EMAILS?: string;
 };
 
 export function getRuntimeEnv(): RuntimeEnv {
@@ -31,6 +37,7 @@ export function newId(): string {
 interface __BaseEnv_Env {
   nex_db: D1Database;
   nex_assets: R2Bucket;
+  NEX_OAUTH_REGISTRATION_LIMITER?: RateLimitBinding;
   INSTAGRAM_APP_ID?: string;
   INSTAGRAM_APP_SECRET?: string;
   INSTAGRAM_TOKEN_ENCRYPTION_KEY?: string;

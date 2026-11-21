@@ -39,8 +39,8 @@ Content generation can happen in a local or external harness; Nex is the cloud w
 The user expects to create videos with DeepSeek Harness and local tools, then store and manage the finished material in a web application. A dedicated VPS is not part of the initial hosting plan.
 
 ## Capabilities and Constraints
-- Inicio reflects saved content and dates. Biblioteca supports content creation, editing, deletion, scripts, planned channels, review states, scheduling, and authenticated media uploads to R2. Calendario reads those dates and supports weekly navigation. MCP can list, create, and schedule items for the authenticated web session.
-- Instagram OAuth and confirmed Reel publishing are implemented when the Meta app configuration is present. TikTok and YouTube, automatic scheduled social publishing, deployment-provider actions, settings persistence, global search, and harness-specific API authentication are not connected.
+- Inicio reflects saved content and dates. Biblioteca supports content creation, editing, deletion, scripts, planned channels, review states, scheduling, and authenticated media uploads to R2. Calendario reads those dates and supports monthly navigation. MCP clients authenticate with OAuth and can list/create/schedule content, upload video parts to R2, list Instagram accounts, and publish confirmed Reels.
+- Instagram OAuth and confirmed Reel publishing are implemented when the Meta app configuration is present. TikTok and YouTube, automatic scheduled social publishing, deployment-provider actions, settings persistence, and global search remain unconnected.
 - Instagram publishing requires an approved piece with an MP4 or MOV video no larger than 1 GB and an Instagram professional account. It creates a short-lived public capability URL for Meta to fetch the private R2 asset; the URL expires after eight hours.
 - Cloudflare Workers, D1, and R2 are configured for the current product flow. Queues and external integrations remain future work.
 - Prototype metrics and campaign content are illustrative and must not be represented as live account data.
@@ -66,9 +66,9 @@ The user-provided content-studio reference image is the visual reference. No rea
 - Ajustes: connections, permissions and preferences.
 
 ## Roadmap
-1. Apply migrations `0002_content_workflow.sql` and `0003_instagram_publishing.sql` to each D1 environment and complete the MCP-to-UI workflow; the local database has both applied.
+1. Apply migrations `0002_content_workflow.sql` through `0005_mcp_oauth.sql` to each D1 environment; `bun run deploy` applies remote migrations before publishing.
 2. Connect TikTok and YouTube, then add automatic publishing for scheduled social posts.
-3. Add harness-specific credentials, then deployment-provider connections and saved workspace preferences.
+3. Add deployment-provider connections and saved workspace preferences.
 
 ## Design evolution
 Las vistas de biblioteca, cuentas, calendario, ajustes y despliegues heredan esta paleta, tipografía y espaciado. Cada integración debe mostrar su estado (conectada, requiere atención o no configurada) en texto y en color, mantener las credenciales fuera de la interfaz pública y conservar la misma jerarquía entre pieza, archivo y destino.

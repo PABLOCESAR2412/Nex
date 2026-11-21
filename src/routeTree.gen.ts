@@ -16,7 +16,13 @@ import { Route as CalendarioRouteImport } from './routes/calendario'
 import { Route as CuentasRouteImport } from './routes/cuentas'
 import { Route as DesplieguesRouteImport } from './routes/despliegues'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as DotwellKnownOauthAuthorizationServerRouteImport } from './routes/[.]well-known.oauth-authorization-server'
 import { Route as ApiMcpRouteImport } from './routes/api/mcp'
+import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
+import { Route as OauthRegisterRouteImport } from './routes/oauth.register'
+import { Route as OauthRevokeRouteImport } from './routes/oauth.revoke'
+import { Route as OauthTokenRouteImport } from './routes/oauth.token'
+import { Route as DotwellKnownOauthProtectedResourceApiMcpRouteImport } from './routes/[.]well-known.oauth-protected-resource.api.mcp'
 import { Route as ApiContentIdAssetRouteImport } from './routes/api/content.$id.asset'
 import { Route as ApiContentIdUploadRouteImport } from './routes/api/content.$id.upload'
 import { Route as ApiSocialInstagramCallbackRouteImport } from './routes/api.social.instagram.callback'
@@ -60,11 +66,43 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DotwellKnownOauthAuthorizationServerRoute =
+  DotwellKnownOauthAuthorizationServerRouteImport.update({
+    id: '/.well-known/oauth-authorization-server',
+    path: '/.well-known/oauth-authorization-server',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiMcpRoute = ApiMcpRouteImport.update({
   id: '/api/mcp',
   path: '/api/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OauthAuthorizeRoute = OauthAuthorizeRouteImport.update({
+  id: '/oauth/authorize',
+  path: '/oauth/authorize',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OauthRegisterRoute = OauthRegisterRouteImport.update({
+  id: '/oauth/register',
+  path: '/oauth/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OauthRevokeRoute = OauthRevokeRouteImport.update({
+  id: '/oauth/revoke',
+  path: '/oauth/revoke',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OauthTokenRoute = OauthTokenRouteImport.update({
+  id: '/oauth/token',
+  path: '/oauth/token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DotwellKnownOauthProtectedResourceApiMcpRoute =
+  DotwellKnownOauthProtectedResourceApiMcpRouteImport.update({
+    id: '/.well-known/oauth-protected-resource/api/mcp',
+    path: '/.well-known/oauth-protected-resource/api/mcp',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiContentIdAssetRoute = ApiContentIdAssetRouteImport.update({
   id: '/api/content/$id/asset',
   path: '/api/content/$id/asset',
@@ -114,7 +152,13 @@ export interface FileRoutesByFullPath {
   '/cuentas': typeof CuentasRoute
   '/despliegues': typeof DesplieguesRoute
   '/login': typeof LoginRoute
+  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/api/mcp': typeof ApiMcpRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/oauth/register': typeof OauthRegisterRoute
+  '/oauth/revoke': typeof OauthRevokeRoute
+  '/oauth/token': typeof OauthTokenRoute
+  '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
   '/api/content/$id/asset': typeof ApiContentIdAssetRoute
   '/api/content/$id/upload': typeof ApiContentIdUploadRoute
   '/api/social/instagram/callback': typeof ApiSocialInstagramCallbackRoute
@@ -131,7 +175,13 @@ export interface FileRoutesByTo {
   '/cuentas': typeof CuentasRoute
   '/despliegues': typeof DesplieguesRoute
   '/login': typeof LoginRoute
+  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/api/mcp': typeof ApiMcpRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/oauth/register': typeof OauthRegisterRoute
+  '/oauth/revoke': typeof OauthRevokeRoute
+  '/oauth/token': typeof OauthTokenRoute
+  '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
   '/api/content/$id/asset': typeof ApiContentIdAssetRoute
   '/api/content/$id/upload': typeof ApiContentIdUploadRoute
   '/api/social/instagram/callback': typeof ApiSocialInstagramCallbackRoute
@@ -149,7 +199,13 @@ export interface FileRoutesById {
   '/cuentas': typeof CuentasRoute
   '/despliegues': typeof DesplieguesRoute
   '/login': typeof LoginRoute
+  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/api/mcp': typeof ApiMcpRoute
+  '/oauth/authorize': typeof OauthAuthorizeRoute
+  '/oauth/register': typeof OauthRegisterRoute
+  '/oauth/revoke': typeof OauthRevokeRoute
+  '/oauth/token': typeof OauthTokenRoute
+  '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
   '/api/content/$id/asset': typeof ApiContentIdAssetRoute
   '/api/content/$id/upload': typeof ApiContentIdUploadRoute
   '/api/social/instagram/callback': typeof ApiSocialInstagramCallbackRoute
@@ -168,7 +224,13 @@ export interface FileRouteTypes {
     | '/cuentas'
     | '/despliegues'
     | '/login'
+    | '/.well-known/oauth-authorization-server'
     | '/api/mcp'
+    | '/oauth/authorize'
+    | '/oauth/register'
+    | '/oauth/revoke'
+    | '/oauth/token'
+    | '/.well-known/oauth-protected-resource/api/mcp'
     | '/api/content/$id/asset'
     | '/api/content/$id/upload'
     | '/api/social/instagram/callback'
@@ -185,7 +247,13 @@ export interface FileRouteTypes {
     | '/cuentas'
     | '/despliegues'
     | '/login'
+    | '/.well-known/oauth-authorization-server'
     | '/api/mcp'
+    | '/oauth/authorize'
+    | '/oauth/register'
+    | '/oauth/revoke'
+    | '/oauth/token'
+    | '/.well-known/oauth-protected-resource/api/mcp'
     | '/api/content/$id/asset'
     | '/api/content/$id/upload'
     | '/api/social/instagram/callback'
@@ -202,7 +270,13 @@ export interface FileRouteTypes {
     | '/cuentas'
     | '/despliegues'
     | '/login'
+    | '/.well-known/oauth-authorization-server'
     | '/api/mcp'
+    | '/oauth/authorize'
+    | '/oauth/register'
+    | '/oauth/revoke'
+    | '/oauth/token'
+    | '/.well-known/oauth-protected-resource/api/mcp'
     | '/api/content/$id/asset'
     | '/api/content/$id/upload'
     | '/api/social/instagram/callback'
@@ -220,7 +294,13 @@ export interface RootRouteChildren {
   CuentasRoute: typeof CuentasRoute
   DesplieguesRoute: typeof DesplieguesRoute
   LoginRoute: typeof LoginRoute
+  DotwellKnownOauthAuthorizationServerRoute: typeof DotwellKnownOauthAuthorizationServerRoute
   ApiMcpRoute: typeof ApiMcpRoute
+  OauthAuthorizeRoute: typeof OauthAuthorizeRoute
+  OauthRegisterRoute: typeof OauthRegisterRoute
+  OauthRevokeRoute: typeof OauthRevokeRoute
+  OauthTokenRoute: typeof OauthTokenRoute
+  DotwellKnownOauthProtectedResourceApiMcpRoute: typeof DotwellKnownOauthProtectedResourceApiMcpRoute
   ApiContentIdAssetRoute: typeof ApiContentIdAssetRoute
   ApiContentIdUploadRoute: typeof ApiContentIdUploadRoute
   ApiSocialInstagramCallbackRoute: typeof ApiSocialInstagramCallbackRoute
@@ -281,11 +361,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/.well-known/oauth-authorization-server': {
+      id: '/.well-known/oauth-authorization-server'
+      path: '/.well-known/oauth-authorization-server'
+      fullPath: '/.well-known/oauth-authorization-server'
+      preLoaderRoute: typeof DotwellKnownOauthAuthorizationServerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mcp': {
       id: '/api/mcp'
       path: '/api/mcp'
       fullPath: '/api/mcp'
       preLoaderRoute: typeof ApiMcpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth/authorize': {
+      id: '/oauth/authorize'
+      path: '/oauth/authorize'
+      fullPath: '/oauth/authorize'
+      preLoaderRoute: typeof OauthAuthorizeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth/register': {
+      id: '/oauth/register'
+      path: '/oauth/register'
+      fullPath: '/oauth/register'
+      preLoaderRoute: typeof OauthRegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth/revoke': {
+      id: '/oauth/revoke'
+      path: '/oauth/revoke'
+      fullPath: '/oauth/revoke'
+      preLoaderRoute: typeof OauthRevokeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth/token': {
+      id: '/oauth/token'
+      path: '/oauth/token'
+      fullPath: '/oauth/token'
+      preLoaderRoute: typeof OauthTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/oauth-protected-resource/api/mcp': {
+      id: '/.well-known/oauth-protected-resource/api/mcp'
+      path: '/.well-known/oauth-protected-resource/api/mcp'
+      fullPath: '/.well-known/oauth-protected-resource/api/mcp'
+      preLoaderRoute: typeof DotwellKnownOauthProtectedResourceApiMcpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/content/$id/asset': {
@@ -348,7 +470,15 @@ const rootRouteChildren: RootRouteChildren = {
   CuentasRoute: CuentasRoute,
   DesplieguesRoute: DesplieguesRoute,
   LoginRoute: LoginRoute,
+  DotwellKnownOauthAuthorizationServerRoute:
+    DotwellKnownOauthAuthorizationServerRoute,
   ApiMcpRoute: ApiMcpRoute,
+  OauthAuthorizeRoute: OauthAuthorizeRoute,
+  OauthRegisterRoute: OauthRegisterRoute,
+  OauthRevokeRoute: OauthRevokeRoute,
+  OauthTokenRoute: OauthTokenRoute,
+  DotwellKnownOauthProtectedResourceApiMcpRoute:
+    DotwellKnownOauthProtectedResourceApiMcpRoute,
   ApiContentIdAssetRoute: ApiContentIdAssetRoute,
   ApiContentIdUploadRoute: ApiContentIdUploadRoute,
   ApiSocialInstagramCallbackRoute: ApiSocialInstagramCallbackRoute,

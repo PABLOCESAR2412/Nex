@@ -1,6 +1,7 @@
 import { HeadContent, Outlet, Scripts, createRootRoute, type ErrorComponentProps } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { StudioSessionProvider } from "../components/studio-session";
 import "../styles.css";
 
 function NotFound() {
@@ -33,7 +34,9 @@ function RootDocument() {
         <HeadContent />
       </head>
       <body>
-        <Outlet />
+        <StudioSessionProvider>
+          <Outlet />
+        </StudioSessionProvider>
         <Scripts />
       </body>
     </html>
