@@ -164,6 +164,12 @@ function loginRedirect(request: Request, nextPath?: string) {
   return Response.redirect(target, 302);
 }
 
+function passwordChangeRedirect(request: Request, nextPath: string) {
+  const target = new URL("/password", request.url);
+  target.searchParams.set("next", nextPath);
+  return Response.redirect(target, 302);
+}
+
 function authorizationRedirect(uri: string, values: Record<string, string>) {
   const target = new URL(uri);
   for (const [key, value] of Object.entries(values)) target.searchParams.set(key, value);
@@ -255,6 +261,11 @@ export async function beginOAuthAuthorization(request: Request) {
     }
     const session = await getCurrentSession();
     if (!session) return loginRedirect(request);
+    if (session.passwordChangeRequired) {
+      const next = new URL("/oauth/authorize", request.url);
+      next.searchParams.set("resume", resumeId);
+      return passwordChangeRedirect(request, next.pathname + next.search);
+    }
     const db = getDb();
     const pending = await db.prepare(
       "SELECT id, client_name, scope FROM mcp_oauth_requests WHERE id = ? AND user_id = ? AND completed_at IS NULL AND expires_at > ?",
@@ -298,6 +309,7 @@ export async function beginOAuthAuthorization(request: Request) {
 
   const session = await getCurrentSession();
   if (!session) return loginRedirect(request);
+  if (session.passwordChangeRequired) return passwordChangeRedirect(request, url.pathname + url.search);
 
   const db = getDb();
   const now = new Date();
@@ -336,6 +348,14 @@ export async function completeOAuthAuthorization(request: Request) {
     const resume = new URL("/oauth/authorize", request.url);
     resume.searchParams.set("resume", requestId);
     return loginRedirect(request, resume.pathname + resume.search);
+  }
+  if (session.passwordChangeRequired) {
+    if (!/^[A-Za-z0-9_-]{1,256}$/.test(requestId)) {
+      return new Response("La sesión debe actualizar su contraseña antes de continuar.", { status: 401, headers: noStoreHeaders() });
+    }
+    const resume = new URL("/oauth/authorize", request.url);
+    resume.searchParams.set("resume", requestId);
+    return passwordChangeRedirect(request, resume.pathname + resume.search);
   }
   const decision = form?.get("decision");
   if (!requestId || (decision !== "allow" && decision !== "deny")) return new Response("Solicitud de autorización inválida.", { status: 400, headers: noStoreHeaders() });

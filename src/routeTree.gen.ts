@@ -16,6 +16,7 @@ import { Route as CalendarioRouteImport } from './routes/calendario'
 import { Route as CuentasRouteImport } from './routes/cuentas'
 import { Route as DesplieguesRouteImport } from './routes/despliegues'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as PasswordRouteImport } from './routes/password'
 import { Route as DotwellKnownOauthAuthorizationServerRouteImport } from './routes/[.]well-known.oauth-authorization-server'
 import { Route as ApiMcpRouteImport } from './routes/api/mcp'
 import { Route as OauthAuthorizeRouteImport } from './routes/oauth.authorize'
@@ -64,6 +65,11 @@ const DesplieguesRoute = DesplieguesRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PasswordRoute = PasswordRouteImport.update({
+  id: '/password',
+  path: '/password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DotwellKnownOauthAuthorizationServerRoute =
@@ -152,6 +158,7 @@ export interface FileRoutesByFullPath {
   '/cuentas': typeof CuentasRoute
   '/despliegues': typeof DesplieguesRoute
   '/login': typeof LoginRoute
+  '/password': typeof PasswordRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/api/mcp': typeof ApiMcpRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
@@ -175,6 +182,7 @@ export interface FileRoutesByTo {
   '/cuentas': typeof CuentasRoute
   '/despliegues': typeof DesplieguesRoute
   '/login': typeof LoginRoute
+  '/password': typeof PasswordRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/api/mcp': typeof ApiMcpRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
@@ -199,6 +207,7 @@ export interface FileRoutesById {
   '/cuentas': typeof CuentasRoute
   '/despliegues': typeof DesplieguesRoute
   '/login': typeof LoginRoute
+  '/password': typeof PasswordRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
   '/api/mcp': typeof ApiMcpRoute
   '/oauth/authorize': typeof OauthAuthorizeRoute
@@ -224,6 +233,7 @@ export interface FileRouteTypes {
     | '/cuentas'
     | '/despliegues'
     | '/login'
+    | '/password'
     | '/.well-known/oauth-authorization-server'
     | '/api/mcp'
     | '/oauth/authorize'
@@ -247,6 +257,7 @@ export interface FileRouteTypes {
     | '/cuentas'
     | '/despliegues'
     | '/login'
+    | '/password'
     | '/.well-known/oauth-authorization-server'
     | '/api/mcp'
     | '/oauth/authorize'
@@ -270,6 +281,7 @@ export interface FileRouteTypes {
     | '/cuentas'
     | '/despliegues'
     | '/login'
+    | '/password'
     | '/.well-known/oauth-authorization-server'
     | '/api/mcp'
     | '/oauth/authorize'
@@ -294,6 +306,7 @@ export interface RootRouteChildren {
   CuentasRoute: typeof CuentasRoute
   DesplieguesRoute: typeof DesplieguesRoute
   LoginRoute: typeof LoginRoute
+  PasswordRoute: typeof PasswordRoute
   DotwellKnownOauthAuthorizationServerRoute: typeof DotwellKnownOauthAuthorizationServerRoute
   ApiMcpRoute: typeof ApiMcpRoute
   OauthAuthorizeRoute: typeof OauthAuthorizeRoute
@@ -359,6 +372,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/password': {
+      id: '/password'
+      path: '/password'
+      fullPath: '/password'
+      preLoaderRoute: typeof PasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/.well-known/oauth-authorization-server': {
@@ -470,6 +490,7 @@ const rootRouteChildren: RootRouteChildren = {
   CuentasRoute: CuentasRoute,
   DesplieguesRoute: DesplieguesRoute,
   LoginRoute: LoginRoute,
+  PasswordRoute: PasswordRoute,
   DotwellKnownOauthAuthorizationServerRoute:
     DotwellKnownOauthAuthorizationServerRoute,
   ApiMcpRoute: ApiMcpRoute,

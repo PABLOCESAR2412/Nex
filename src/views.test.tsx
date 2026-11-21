@@ -11,7 +11,7 @@ vi.mock("./lib/auth", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./lib/auth")>();
   return {
     ...actual,
-    meFn: vi.fn().mockResolvedValue({ id: "test-user", name: "Pablo", email: "pablo@example.test" }),
+    meFn: vi.fn().mockResolvedValue({ id: "test-user", name: "Pablo", email: "pablo@example.test", password_change_required: false }),
   };
 });
 
@@ -27,7 +27,7 @@ function renderRoute(path: string) {
 
 describe("Nex views smoke", () => {
   beforeEach(() => {
-    vi.mocked(meFn).mockReset().mockResolvedValue({ id: "test-user", name: "Pablo", email: "pablo@example.test" });
+    vi.mocked(meFn).mockReset().mockResolvedValue({ id: "test-user", name: "Pablo", email: "pablo@example.test", password_change_required: false });
     vi.mocked(listRegisteredUsersFn).mockReset().mockResolvedValue({ status: "not_configured" });
   });
   it("checks the session only once while navigating between studio views", async () => {

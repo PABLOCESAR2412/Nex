@@ -15,13 +15,20 @@ export function LoginPage() {
     setError(null);
     setLoading(true);
     try {
+      let passwordChangeRequired = false;
       if (mode === "register") {
         await registerFn({ data: { email, password, name } });
       } else {
-        await loginFn({ data: { email, password } });
+        const result = await loginFn({ data: { email, password } });
+        passwordChangeRequired = result.passwordChangeRequired;
       }
       const requestedPath = new URLSearchParams(window.location.search).get("next");
-      window.location.replace(safeInternalDestination(requestedPath, window.location.origin));
+      const destination = safeInternalDestination(requestedPath, window.location.origin);
+      if (passwordChangeRequired) {
+        window.location.replace(`/password?next=${encodeURIComponent(destination)}`);
+      } else {
+        window.location.replace(destination);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo iniciar sesión.");
     } finally {

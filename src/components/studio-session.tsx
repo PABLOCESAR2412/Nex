@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState, type ReactNode 
 import { useRouterState } from "@tanstack/react-router";
 import { meFn } from "../lib/auth";
 
-export type StudioUser = { id: string; name: string | null; email: string };
+export type StudioUser = { id: string; name: string | null; email: string; password_change_required?: boolean };
 type StudioSession = { user: StudioUser | null; checked: boolean };
 
 const StudioSessionContext = createContext<StudioSession | null>(null);
@@ -23,6 +23,9 @@ export function StudioSessionProvider({ children }: { children: ReactNode }) {
       if (!user) {
         const next = window.location.pathname + window.location.search;
         window.location.replace(`/login?next=${encodeURIComponent(next)}`);
+      } else if (user.password_change_required && pathname !== "/password") {
+        const next = window.location.pathname + window.location.search;
+        window.location.replace(`/password?next=${encodeURIComponent(next)}`);
       }
     }).catch(() => {
       if (cancelled) return;
