@@ -3,6 +3,7 @@ import { z } from "zod";
 import { authMiddleware } from "./auth";
 import { getDb, newId } from "./db";
 import { randomSecret, sha256Hex } from "./instagram";
+import { isAllowedAccountEmail } from "./auth-policy";
 
 export type McpTokenSummary = {
   id: string;
@@ -18,10 +19,10 @@ export const getMcpUserId = createServerOnlyFn(async (request: Request) => {
   const tokenHash = await sha256Hex(match[1]);
   const db = getDb();
   const token = await db
-    .prepare("SELECT id, user_id FROM mcp_tokens WHERE token_hash = ? AND revoked_at IS NULL")
+    .prepare("SELECT t.id, t.user_id, u.email FROM mcp_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ? AND t.revoked_at IS NULL")
     .bind(tokenHash)
-    .first<{ id: string; user_id: string }>();
-  if (!token) return null;
+    .first<{ id: string; user_id: string; email: string }>();
+  if (!token || !isAllowedAccountEmail(token.email)) return null;
   await db.prepare("UPDATE mcp_tokens SET last_used_at = datetime('now') WHERE id = ? AND revoked_at IS NULL").bind(token.id).run();
   return token.user_id;
 });

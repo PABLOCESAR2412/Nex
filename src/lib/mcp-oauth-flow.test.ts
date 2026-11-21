@@ -177,7 +177,7 @@ describe("MCP OAuth token client policy", () => {
         resource,
         expires_at: new Date(Date.now() + 60_000).toISOString(),
       })
-      .mockResolvedValueOnce({ email: "user@example.test" });
+      .mockResolvedValueOnce({ email: "pablocesar.t.g@gmail.com" });
 
     const response = await beginOAuthAuthorization(
       new Request(`https://nex.example/oauth/authorize?resume=${requestId}`),
@@ -252,6 +252,7 @@ describe("MCP OAuth token client policy", () => {
       .mockResolvedValueOnce({
         code_hash: `hash:${code}`,
         user_id: "user-test-id",
+        email: "pablocesar.t.g@gmail.com",
         client_id: "client-test-id",
         redirect_uri: redirectUri,
         code_challenge: await challengeFor(verifier),
@@ -283,6 +284,7 @@ describe("MCP OAuth token client policy", () => {
       .mockResolvedValueOnce({
         code_hash: `hash:${code}`,
         user_id: "user-test-id",
+        email: "pablocesar.t.g@gmail.com",
         client_id: "client-test-id",
         redirect_uri: unregisteredUri,
         code_challenge: await challengeFor(verifier),
@@ -313,6 +315,7 @@ describe("MCP OAuth token client policy", () => {
       .mockResolvedValueOnce({
         code_hash: `hash:${code}`,
         user_id: "user-test-id",
+        email: "pablocesar.t.g@gmail.com",
         client_id: "client-test-id",
         redirect_uri: redirectUri,
         code_challenge: await challengeFor(verifier),
@@ -344,6 +347,7 @@ describe("MCP OAuth token client policy", () => {
       .mockResolvedValueOnce({
         id: "grant-test-id",
         user_id: "user-test-id",
+        email: "pablocesar.t.g@gmail.com",
         client_id: "client-test-id",
         client_name: "Hermes",
         resource,

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { getDb, newId } from "./db";
 import { readSessionToken, setSessionCookie, clearSessionCookie } from "./session";
 import { hashPassword, verifyPassword } from "./password";
+import { isAllowedAccountEmail, normalizeEmail } from "./auth-policy";
 
 export type Session = { id: string; userId: string };
 
@@ -11,11 +12,19 @@ export const getCurrentSession = createServerOnlyFn(async (): Promise<Session | 
   const token = readSessionToken();
   if (!token) return null;
   const row = await getDb()
-    .prepare("SELECT id, user_id, expires_at FROM sessions WHERE id = ?")
+    .prepare("SELECT s.id, s.user_id, s.expires_at, u.email FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.id = ?")
     .bind(token)
-    .first<{ id: string; user_id: string; expires_at: string }>();
-  if (!row) return null;
+    .first<{ id: string; user_id: string; expires_at: string; email: string }>();
+  if (!row) {
+    clearSessionCookie();
+    return null;
+  }
   if (new Date(row.expires_at).getTime() <= Date.now()) {
+    await getDb().prepare("DELETE FROM sessions WHERE id = ?").bind(row.id).run();
+    clearSessionCookie();
+    return null;
+  }
+  if (!isAllowedAccountEmail(row.email)) {
     await getDb().prepare("DELETE FROM sessions WHERE id = ?").bind(row.id).run();
     clearSessionCookie();
     return null;
@@ -31,10 +40,11 @@ export const authMiddleware = createMiddleware({ type: "function" }).server(asyn
 
 // Register
 export const registerFn = createServerFn({ method: "POST" })
-  .validator(z.object({ email: z.string().email(), password: z.string().min(8), name: z.string().optional() }))
+  .validator(z.object({ email: z.string().trim().email().transform(normalizeEmail), password: z.string().min(8), name: z.string().optional() }))
   .handler(async ({ data }) => {
+    if (!isAllowedAccountEmail(data.email)) throw new Error("Por ahora solo se permite el correo autorizado.");
     const db = getDb();
-    const existing = await db.prepare("SELECT id FROM users WHERE email = ?").bind(data.email).first();
+    const existing = await db.prepare("SELECT id FROM users WHERE lower(trim(email)) = ?").bind(data.email).first();
     if (existing) throw new Error("Ese correo ya tiene una cuenta.");
     const id = newId();
     const passwordHash = await hashPassword(data.password);
@@ -58,11 +68,12 @@ function getDummyHash(): Promise<string> {
 }
 
 export const loginFn = createServerFn({ method: "POST" })
-  .validator(z.object({ email: z.string().email(), password: z.string() }))
+  .validator(z.object({ email: z.string().trim().email().transform(normalizeEmail), password: z.string() }))
   .handler(async ({ data }) => {
+    if (!isAllowedAccountEmail(data.email)) throw new Error("Invalid email or password");
     const db = getDb();
     const user = await db
-      .prepare("SELECT id, password_hash FROM users WHERE email = ?")
+      .prepare("SELECT id, password_hash FROM users WHERE lower(trim(email)) = ?")
       .bind(data.email)
       .first<{ id: string; password_hash: string }>();
     const hashToCheck = user?.password_hash ?? (await getDummyHash());

@@ -60,6 +60,7 @@ describe("MCP OAuth access-token lookup", () => {
     db.first.mockResolvedValue({
       id: "grant-test-id",
       user_id: "user-test-id",
+      email: "pablocesar.t.g@gmail.com",
       client_id: "client-test-id",
       scopes: "nex:read nex:write",
       resource: RESOURCE,

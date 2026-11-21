@@ -1,5 +1,6 @@
 import type { AuthInfo } from "@modelcontextprotocol/server";
 import { getCurrentSession } from "./auth";
+import { isAllowedAccountEmail } from "./auth-policy";
 import { getDb, getRuntimeEnv, newId } from "./db";
 import { randomSecret, sha256Hex } from "./instagram";
 import {
@@ -32,6 +33,7 @@ type OAuthClientRow = {
 
 type OAuthCodeRow = {
   user_id: string;
+  email: string;
   client_id: string;
   redirect_uri: string;
   code_challenge: string;
@@ -44,6 +46,7 @@ type OAuthCodeRow = {
 type OAuthGrantRow = {
   id: string;
   user_id: string;
+  email: string;
   client_id: string;
   client_name: string;
   resource: string;
@@ -413,9 +416,9 @@ export async function exchangeOAuthToken(request: Request) {
     const now = new Date().toISOString();
     const db = getDb();
     const authorizationCode = await db.prepare(
-      "SELECT code_hash, user_id, client_id, redirect_uri, code_challenge, scope, resource, expires_at, consumed_by FROM mcp_oauth_codes WHERE code_hash = ? AND client_id = ? AND redirect_uri = ? AND expires_at > ? AND consumed_by IS NULL",
+      "SELECT c.code_hash, c.user_id, u.email, c.client_id, c.redirect_uri, c.code_challenge, c.scope, c.resource, c.expires_at, c.consumed_by FROM mcp_oauth_codes c JOIN users u ON u.id = c.user_id WHERE c.code_hash = ? AND c.client_id = ? AND c.redirect_uri = ? AND c.expires_at > ? AND c.consumed_by IS NULL",
     ).bind(codeHash, clientId, redirectUri, now).first<OAuthCodeRow>();
-    if (!authorizationCode || authorizationCode.resource !== resource) return oauthError("invalid_grant", "El código de autorización expiró o no coincide.");
+    if (!authorizationCode || !isAllowedAccountEmail(authorizationCode.email) || authorizationCode.resource !== resource) return oauthError("invalid_grant", "El código de autorización expiró o no coincide.");
     if (!await verifyPkce(verifier, authorizationCode.code_challenge, "S256")) return oauthError("invalid_grant", "La verificación PKCE falló.");
 
     const operationId = randomSecret();
@@ -443,9 +446,9 @@ export async function exchangeOAuthToken(request: Request) {
     const refreshHash = await sha256Hex(refreshToken);
     const now = new Date().toISOString();
     const grant = await getDb().prepare(
-      "SELECT id, user_id, client_id, client_name, resource, scopes, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at FROM mcp_oauth_grants WHERE refresh_token_hash = ? AND client_id = ? AND resource = ? AND revoked_at IS NULL AND refresh_expires_at > ?",
+      "SELECT g.id, g.user_id, u.email, g.client_id, g.client_name, g.resource, g.scopes, g.access_token_hash, g.refresh_token_hash, g.access_expires_at, g.refresh_expires_at FROM mcp_oauth_grants g JOIN users u ON u.id = g.user_id WHERE g.refresh_token_hash = ? AND g.client_id = ? AND g.resource = ? AND g.revoked_at IS NULL AND g.refresh_expires_at > ?",
     ).bind(refreshHash, clientId, resource, now).first<OAuthGrantRow>();
-    if (!grant) return oauthError("invalid_grant", "La sesión OAuth expiró, fue revocada o no coincide.");
+    if (!grant || !isAllowedAccountEmail(grant.email)) return oauthError("invalid_grant", "La sesión OAuth expiró, fue revocada o no coincide.");
 
     let scopes: McpOAuthScope[];
     try {
@@ -499,9 +502,9 @@ export async function resolveMcpAccessToken(token: string, origin: string): Prom
   const resourceMetadataUrl = new URL("/.well-known/oauth-protected-resource/api/mcp", origin).toString();
 
   if (token.startsWith("nex_live_")) {
-    const legacy = await db.prepare("SELECT id, user_id FROM mcp_tokens WHERE token_hash = ? AND revoked_at IS NULL")
-      .bind(tokenHash).first<{ id: string; user_id: string }>();
-    if (!legacy) return null;
+    const legacy = await db.prepare("SELECT t.id, t.user_id, u.email FROM mcp_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ? AND t.revoked_at IS NULL")
+      .bind(tokenHash).first<{ id: string; user_id: string; email: string }>();
+    if (!legacy || !isAllowedAccountEmail(legacy.email)) return null;
     await db.prepare("UPDATE mcp_tokens SET last_used_at = datetime('now') WHERE id = ? AND revoked_at IS NULL").bind(legacy.id).run();
     return {
       token,
@@ -516,11 +519,11 @@ export async function resolveMcpAccessToken(token: string, origin: string): Prom
 
   const now = new Date().toISOString();
   const grant = await db.prepare(
-    "SELECT id, user_id, client_id, scopes, access_expires_at FROM mcp_oauth_grants WHERE access_token_hash = ? AND resource = ? AND revoked_at IS NULL AND access_expires_at > ?",
+    "SELECT g.id, g.user_id, u.email, g.client_id, g.scopes, g.access_expires_at FROM mcp_oauth_grants g JOIN users u ON u.id = g.user_id WHERE g.access_token_hash = ? AND g.resource = ? AND g.revoked_at IS NULL AND g.access_expires_at > ?",
   ).bind(tokenHash, resource, now).first<{
-    id: string; user_id: string; client_id: string; scopes: string; access_expires_at: string;
+    id: string; user_id: string; email: string; client_id: string; scopes: string; access_expires_at: string;
   }>();
-  if (!grant) return null;
+  if (!grant || !isAllowedAccountEmail(grant.email)) return null;
 
   const expiryMs = Date.parse(grant.access_expires_at);
   if (!Number.isFinite(expiryMs) || expiryMs <= Date.now()) return null;
