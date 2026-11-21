@@ -186,7 +186,7 @@ describe("MCP OAuth token client policy", () => {
 
     expect(response.status).toBe(200);
     expect(body).toContain("Conectar Hermes Agent con Nex");
-    expect(body).toContain("user@example.test");
+    expect(body).toContain("pablocesar.t.g@gmail.com");
     expect(body).toContain(requestId);
   });
 
