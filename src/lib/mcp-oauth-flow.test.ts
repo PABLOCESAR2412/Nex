@@ -131,6 +131,36 @@ describe("MCP OAuth token client policy", () => {
     expect(location.searchParams.get("next")).toBe(`/oauth/authorize?resume=${requestId}`);
   });
 
+  it.each(["missing", "null"])("accepts consent POSTs from an embedded browser with %s Origin", async (originMode) => {
+    const requestId = "r".repeat(43);
+    const headers = new Headers({ "content-type": "application/x-www-form-urlencoded" });
+    if (originMode === "null") headers.set("origin", "null");
+    const response = await completeOAuthAuthorization(new Request("https://nex.example/oauth/authorize", {
+      method: "POST",
+      headers,
+      body: new URLSearchParams({ request_id: requestId, decision: "allow" }),
+    }));
+    const location = new URL(response.headers.get("location")!);
+
+    expect(response.status).toBe(302);
+    expect(location.pathname).toBe("/login");
+    expect(location.searchParams.get("next")).toBe(`/oauth/authorize?resume=${requestId}`);
+  });
+
+  it("rejects consent POSTs from an unrelated browser origin", async () => {
+    const response = await completeOAuthAuthorization(new Request("https://nex.example/oauth/authorize", {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        origin: "https://attacker.example",
+      },
+      body: new URLSearchParams({ request_id: "r".repeat(43), decision: "allow" }),
+    }));
+
+    expect(response.status).toBe(403);
+    expect(await response.text()).toBe("Origen no permitido.");
+  });
+
   it("resumes pending consent for the same authenticated user", async () => {
     const requestId = "pending-request-1234567890";
     fakeDb.session = { id: "session-test-id", userId: "user-test-id" };

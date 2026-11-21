@@ -19,6 +19,16 @@ const navigation: Array<{ key: ViewKey; label: string; href: string; icon: React
   { key: "ajustes", label: "Ajustes", href: "/ajustes", icon: <><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" /><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.8-.6a8 8 0 0 1-1.5.9l-.4 1.9h-2.8l-.4-1.9a8 8 0 0 1-1.5-.9l-1.8.6-1.4-2.4 1.4-1.1a7.4 7.4 0 0 1 0-1.8l-1.4-1.1 1.4-2.4 1.8.6a8 8 0 0 1 1.5-.9l.4-1.9h2.8l.4 1.9a8 8 0 0 1 1.5.9l1.8-.6 1.4 2.4-1.4 1.1a7.4 7.4 0 0 1 0 1.7Z" transform="translate(-2 -2)" /></> },
 ];
 
+function formatMcpScopes(scopes: string) {
+  const labels: Record<string, string> = {
+    "nex:read": "Consultar datos",
+    "nex:write": "Crear y programar contenido",
+    "nex:publish": "Publicar en Instagram",
+    offline_access: "Mantener sesión activa",
+  };
+  return scopes.split(/\s+/).filter(Boolean).map((scope) => labels[scope] ?? scope).join(", ");
+}
+
 function McpConnectionDialog({ onClose }: { onClose: () => void }) {
   const dialogRef = useRef<HTMLElement>(null);
   const [tokens, setTokens] = useState<McpTokenSummary[]>([]);
@@ -153,9 +163,9 @@ function McpConnectionDialog({ onClose }: { onClose: () => void }) {
         {loading ? <SkeletonRows count={2} label="Cargando autorizaciones" variant="compact" /> : <>
           <section className="mcp-existing-keys" aria-labelledby="mcp-oauth-connections-title">
             <h3 id="mcp-oauth-connections-title">Autorizaciones activas</h3>
-            {oauthGrants.length === 0 ? <p>Aún no hay sesiones OAuth autorizadas. Conecta Hermes o ChatGPT para que aparezcan aquí.</p> : oauthGrants.map((grant) => <div className="mcp-key-row" key={grant.id}><div><strong>{grant.client_name}</strong><small>Permisos: {grant.scopes.replaceAll("nex:", "")} · Creada {new Date(grant.created_at.replace(" ", "T") + (grant.created_at.endsWith("Z") ? "" : "Z")).toLocaleDateString("es-EC")} · {grant.last_used_at ? `Último uso ${new Date(grant.last_used_at.replace(" ", "T") + (grant.last_used_at.endsWith("Z") ? "" : "Z")).toLocaleString("es-EC")}` : "Aún sin uso"}</small></div><button className="quiet-button" type="button" disabled={busy} onClick={() => void revokeOAuthGrant(grant)}>Revocar</button></div>)}
+            {oauthGrants.length === 0 ? <p>Una sesión aparece aquí después de que Hermes o ChatGPT inicie sesión en Nex y aceptes los permisos. Luego puedes revisar el acceso o revocarlo.</p> : oauthGrants.map((grant) => <div className="mcp-key-row" key={grant.id}><div><strong>{grant.client_name}</strong><small>Permisos: {formatMcpScopes(grant.scopes)} · Creada {new Date(grant.created_at.replace(" ", "T") + (grant.created_at.endsWith("Z") ? "" : "Z")).toLocaleDateString("es-EC")} · {grant.last_used_at ? `Último uso ${new Date(grant.last_used_at.replace(" ", "T") + (grant.last_used_at.endsWith("Z") ? "" : "Z")).toLocaleString("es-EC")}` : "Sin uso registrado todavía"}</small></div><button className="quiet-button" type="button" disabled={busy} onClick={() => void revokeOAuthGrant(grant)}>Revocar</button></div>)}
           </section>
-          {tokens.length > 0 && <section className="mcp-existing-keys" aria-labelledby="mcp-legacy-connections-title"><h3 id="mcp-legacy-connections-title">Claves manuales anteriores</h3><p>Al activar OAuth, estas claves Bearer se revocan por seguridad. Reconecta Hermes o ChatGPT desde el acceso OAuth.</p>{tokens.map((token) => <div className="mcp-key-row" key={token.id}><div><strong>{token.label}</strong><small>Creada {new Date(token.created_at.replace(" ", "T") + (token.created_at.endsWith("Z") ? "" : "Z")).toLocaleDateString("es-EC")} · {token.last_used_at ? `Último uso ${new Date(token.last_used_at.replace(" ", "T") + (token.last_used_at.endsWith("Z") ? "" : "Z")).toLocaleString("es-EC")}` : "Aún sin uso"}</small></div><button className="quiet-button" type="button" disabled={busy} onClick={() => void revoke(token)}>Revocar</button></div>)}</section>}
+          {tokens.length > 0 && <section className="mcp-existing-keys" aria-labelledby="mcp-legacy-connections-title"><h3 id="mcp-legacy-connections-title">Claves Bearer antiguas (no OAuth)</h3><p>Son claves fijas del método anterior, separadas de tus cuentas de Instagram. Mientras aparezcan aquí, siguen activas; pulsa Revocar para deshabilitarlas. “Sin uso registrado” significa que Nex no recibió llamadas con esa clave.</p>{tokens.map((token) => <div className="mcp-key-row" key={token.id}><div><strong>{token.label}</strong><small>Creada {new Date(token.created_at.replace(" ", "T") + (token.created_at.endsWith("Z") ? "" : "Z")).toLocaleDateString("es-EC")} · {token.last_used_at ? `Último uso ${new Date(token.last_used_at.replace(" ", "T") + (token.last_used_at.endsWith("Z") ? "" : "Z")).toLocaleString("es-EC")}` : "Sin uso registrado"}</small></div><button className="quiet-button" type="button" disabled={busy} onClick={() => void revoke(token)}>Revocar</button></div>)}</section>}
         </>}
       </div>
       <button className="quiet-button mcp-close" type="button" onClick={onClose}>Cerrar</button>

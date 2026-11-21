@@ -320,7 +320,9 @@ export async function beginOAuthAuthorization(request: Request) {
 
 export async function completeOAuthAuthorization(request: Request) {
   const requestOrigin = new URL(request.url).origin;
-  if (request.headers.get("origin") !== requestOrigin) return new Response("Origen no permitido.", { status: 403, headers: noStoreHeaders() });
+  const origin = request.headers.get("origin");
+  // Embedded OAuth browsers can omit Origin; the one-time request ID and authenticated user are checked below.
+  if (origin && origin !== "null" && origin !== requestOrigin) return new Response("Origen no permitido.", { status: 403, headers: noStoreHeaders() });
   const form = await readForm(request);
   const requestId = form?.get("request_id") ?? "";
   const session = await getCurrentSession();
