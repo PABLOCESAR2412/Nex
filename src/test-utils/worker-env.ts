@@ -82,15 +82,22 @@ export function createFakeBucket() {
       objects.set(key, { bytes, contentType: options?.httpMetadata?.contentType });
       return { key, size: bytes.length };
     },
-    async get(key: string) {
+    async get(key: string, options?: { range?: { offset?: number; length?: number } }) {
       const stored = objects.get(key);
       if (!stored) return null;
+      const offset = options?.range?.offset ?? 0;
+      const slice = options?.range ? stored.bytes.slice(offset, offset + (options.range.length ?? stored.bytes.length - offset)) : stored.bytes;
       return {
         key,
+        // Como en R2, size es el tamaño total del objeto aunque se pida solo un rango.
         size: stored.bytes.length,
-        body: new Response(stored.bytes as BodyInit).body,
+        body: new Response(slice as BodyInit).body,
         writeHttpMetadata(headers: Headers) { if (stored.contentType) headers.set("content-type", stored.contentType); },
       };
+    },
+    async head(key: string) {
+      const stored = objects.get(key);
+      return stored ? { key, size: stored.bytes.length } : null;
     },
     async delete(key: string) { objects.delete(key); },
     async createMultipartUpload(key: string, options?: { httpMetadata?: { contentType?: string } }) {

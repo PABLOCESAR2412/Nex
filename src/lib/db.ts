@@ -16,6 +16,9 @@ export type RuntimeEnv = {
   INSTAGRAM_APP_SECRET?: string;
   INSTAGRAM_TOKEN_ENCRYPTION_KEY?: string;
   INSTAGRAM_GRAPH_VERSION?: string;
+  TOKEN_ENCRYPTION_KEY?: string;
+  TIKTOK_CLIENT_KEY?: string;
+  TIKTOK_CLIENT_SECRET?: string;
   PUBLIC_APP_URL?: string;
 };
 
@@ -35,6 +38,9 @@ interface __BaseEnv_Env {
   INSTAGRAM_APP_SECRET?: string;
   INSTAGRAM_TOKEN_ENCRYPTION_KEY?: string;
   INSTAGRAM_GRAPH_VERSION?: string;
+  TOKEN_ENCRYPTION_KEY?: string;
+  TIKTOK_CLIENT_KEY?: string;
+  TIKTOK_CLIENT_SECRET?: string;
   PUBLIC_APP_URL?: string;
 }
 

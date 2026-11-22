@@ -3,6 +3,7 @@ import { z } from "zod";
 import { authMiddleware } from "./auth";
 import { getDb, getRuntimeEnv, newId } from "./db";
 import { handleInstagramPublishRequest } from "./instagram-publish";
+import { checkTikTokPublication, startTikTokPublication } from "./tiktok";
 
 export type PublicationStatus = "programada" | "en_curso" | "publicada" | "borrador_enviado" | "fallida" | "requiere_revision" | "cancelada";
 
@@ -18,7 +19,7 @@ export type PublicationSummary = {
   updated_at: string;
 };
 
-type PublicationRow = { id: string; user_id: string; content_id: string; account_id: string; platform: string; job_id: string | null; updated_at: string };
+export type PublicationRow = { id: string; user_id: string; content_id: string; account_id: string; platform: string; job_id: string | null; updated_at: string };
 
 /** Resultado de consultar una publicación en curso en la red social. */
 export type PublicationOutcome = { status: "en_curso" | "publicada" | "borrador_enviado" | "fallida" | "requiere_revision"; error?: string };
@@ -118,12 +119,28 @@ async function settleContent(contentId: string) {
 }
 
 async function finish(publication: { id: string; content_id: string }, status: Exclude<PublicationStatus, "programada" | "en_curso">, error?: string) {
-  await getDb()
+  const db = getDb();
+  await db
     .prepare("UPDATE publications SET status = ?, error = ?, updated_at = datetime('now') WHERE id = ?")
     .bind(status, error ? error.slice(0, 500) : null, publication.id)
     .run();
+  // Una publicación confirmada por la red marca la pieza como publicada (Instagram ya lo hace por su cuenta; es idempotente).
+  if (status === "publicada") {
+    await db.prepare("UPDATE content_items SET state = 'publicada', scheduled_at = NULL, updated_at = datetime('now') WHERE id = ?").bind(publication.content_id).run();
+  }
   await settleContent(publication.content_id);
 }
+
+/** Cierra las publicaciones abiertas de una cuenta que se desconecta, para que el cron no intente usarla. */
+export const failOpenPublicationsForAccount = createServerOnlyFn(async (userId: string, accountId: string, message: string) => {
+  const db = getDb();
+  const { results } = await db
+    .prepare("SELECT id, content_id FROM publications WHERE user_id = ? AND account_id = ? AND status IN ('programada', 'en_curso')")
+    .bind(userId, accountId)
+    .all<{ id: string; content_id: string }>();
+  for (const publication of results ?? []) await finish(publication, "fallida", message);
+  return (results ?? []).length;
+});
 
 async function callInstagram(userId: string, payload: Record<string, unknown>) {
   const origin = getRuntimeEnv().PUBLIC_APP_URL?.trim().replace(/\/+$/, "");
@@ -154,11 +171,14 @@ const instagramAdapter: PublicationAdapter = {
   },
 };
 
+const tiktokAdapter: PublicationAdapter = { start: startTikTokPublication, check: checkTikTokPublication };
+
 const adapters: Record<string, PublicationAdapter> = {
   Instagram: instagramAdapter,
+  TikTok: tiktokAdapter,
 };
 
-/** Permite registrar o sustituir el adaptador de una red (TikTok lo añade desde su módulo y los tests lo simulan). */
+/** Permite registrar o sustituir el adaptador de una red (los tests lo simulan). */
 export const registerPublicationAdapter = createServerOnlyFn((platform: string, adapter: PublicationAdapter) => {
   adapters[platform] = adapter;
 });

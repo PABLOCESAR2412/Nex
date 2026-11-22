@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { Icon, PageIntro, PrototypeNotice, StudioShell } from "./studio-shell";
 import { CONTENT_STATES, type ContentItem, type ContentState, createContentFn, deleteContentFn, listContentFn, updateContentFn } from "../lib/content";
-import { listInstagramAccountsFn, listSocialAccountsFn, type InstagramAccountSummary, type SocialAccountSummary } from "../lib/social";
+import { listSocialAccountsFn, type InstagramAccountSummary, type SocialAccountSummary } from "../lib/social";
 import { PublicationsPanel } from "./publications-panel";
 
 const stateLabels: Record<ContentState, string> = {
@@ -352,7 +352,7 @@ export function LibraryPage() {
 
   return <StudioShell active="biblioteca">
     <PageIntro title="Biblioteca" subtitle="Videos, guiones y referencias de tu estudio." />
-    {!loading && instagramAccounts.length === 0 && <p className="content-feedback">Para publicar un Reel, conecta una cuenta profesional desde <a href="/cuentas">Cuentas</a>.</p>}
+    {!loading && socialAccounts.length === 0 && <p className="content-feedback">Para publicar, conecta una cuenta de Instagram o TikTok desde <a href="/cuentas">Cuentas</a>.</p>}
     {error && <p className="prototype-notice" role="alert">{error}</p>}
     <form className="library-toolbar" onSubmit={handleCreate}>
       <div className="library-search"><Icon><path d="M12 5v14M5 12h14" /></Icon><input aria-label="Título de la nueva pieza" placeholder="Título de la nueva pieza" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={160} required /></div>
@@ -372,17 +372,43 @@ export function LibraryPage() {
   </StudioShell>;
 }
 
+const ACCOUNT_NOTICES: Record<string, Record<string, string>> = {
+  instagram: {
+    connected: "Cuenta de Instagram conectada.",
+    denied: "No se concedieron los permisos de Instagram.",
+    config: "Instagram todavía no está configurado. Revisa los datos de conexión de Meta más abajo.",
+    expired: "La conexión venció. Vuelve a intentarlo.",
+    invalid: "No se pudo validar la conexión.",
+    token_error: "Instagram no entregó un token válido. Intenta conectar de nuevo.",
+    profile_error: "No se pudo leer el perfil profesional de Instagram.",
+    error: "No se pudo completar la conexión. Revisa el callback, las migraciones y los registros del Worker.",
+  },
+  tiktok: {
+    connected: "Cuenta de TikTok conectada.",
+    denied: "No se concedieron los permisos de TikTok.",
+    config: "TikTok todavía no está configurado. Revisa los datos de conexión de TikTok más abajo.",
+    expired: "La conexión venció. Vuelve a intentarlo.",
+    invalid: "No se pudo validar la conexión.",
+    token_error: "TikTok no entregó un token válido. Intenta conectar de nuevo.",
+    scope: "Falta el permiso para subir videos. Conecta de nuevo y acepta todos los permisos que pide TikTok.",
+    profile_error: "No se pudo leer el perfil de TikTok.",
+    error: "No se pudo completar la conexión. Revisa el callback, las migraciones y los registros del Worker.",
+  },
+};
+
 export function AccountsPage() {
-  const [instagramAccounts, setInstagramAccounts] = useState<InstagramAccountSummary[]>([]);
-  const [configured, setConfigured] = useState(false);
+  const [accounts, setAccounts] = useState<SocialAccountSummary[]>([]);
+  const [configured, setConfigured] = useState({ instagram: false, tiktok: false });
   const [accountError, setAccountError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const instagramAccounts = accounts.filter((account) => account.platform === "Instagram");
+  const tiktokAccounts = accounts.filter((account) => account.platform === "TikTok");
 
   async function refreshAccounts() {
     try {
-      const result = await listInstagramAccountsFn();
-      setInstagramAccounts(result.accounts);
-      setConfigured(result.configured);
+      const result = await listSocialAccountsFn();
+      setAccounts(result.accounts);
+      setConfigured({ instagram: result.instagramConfigured, tiktok: result.tiktokConfigured });
       setAccountError(null);
     } catch (error) {
       setAccountError(error instanceof Error ? error.message : "No se pudieron cargar las cuentas.");
@@ -391,37 +417,31 @@ export function AccountsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    listInstagramAccountsFn()
+    listSocialAccountsFn()
       .then((result) => {
         if (cancelled) return;
-        setInstagramAccounts(result.accounts);
-        setConfigured(result.configured);
+        setAccounts(result.accounts);
+        setConfigured({ instagram: result.instagramConfigured, tiktok: result.tiktokConfigured });
       })
       .catch((error) => {
         if (!cancelled) setAccountError(error instanceof Error ? error.message : "No se pudieron cargar las cuentas.");
       });
-    const status = new URLSearchParams(window.location.search).get("instagram");
-    const messages: Record<string, string> = {
-      connected: "Cuenta de Instagram conectada.",
-      denied: "No se concedieron los permisos de Instagram.",
-      config: "Instagram todavía no está configurado. Revisa los datos de conexión de Meta más abajo.",
-      expired: "La conexión venció. Vuelve a intentarlo.",
-      invalid: "No se pudo validar la conexión.",
-      token_error: "Instagram no entregó un token válido. Intenta conectar de nuevo.",
-      profile_error: "No se pudo leer el perfil profesional de Instagram.",
-      error: "No se pudo completar la conexión. Revisa el callback, las migraciones y los registros del Worker.",
-    };
-    if (status && messages[status]) {
-      setNotice(messages[status]);
-      window.history.replaceState({}, "", window.location.pathname);
+    const params = new URLSearchParams(window.location.search);
+    for (const platform of ["instagram", "tiktok"]) {
+      const status = params.get(platform);
+      const message = status ? ACCOUNT_NOTICES[platform][status] : undefined;
+      if (message) {
+        setNotice(message);
+        window.history.replaceState({}, "", window.location.pathname);
+      }
     }
     return () => { cancelled = true; };
   }, []);
 
-  async function disconnectInstagram(account: InstagramAccountSummary) {
+  async function disconnectAccount(account: SocialAccountSummary) {
     if (!window.confirm("¿Desconectar " + account.handle + " de Nex?")) return;
     try {
-      const response = await fetch("/api/social/instagram/disconnect", {
+      const response = await fetch("/api/social/" + account.platform.toLowerCase() + "/disconnect", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ accountId: account.id }),
@@ -435,19 +455,26 @@ export function AccountsPage() {
     }
   }
 
+  const connectButton = (platform: "instagram" | "tiktok", label: string, existing: number) => configured[platform]
+    ? <a className="primary-button" href={"/api/social/" + platform + "/connect"}><Icon><path d="M12 5v14M5 12h14" /></Icon><span>{existing ? "Añadir cuenta" : "Conectar " + label}</span></a>
+    : <button className="primary-button" type="button" disabled><Icon><path d="M12 5v14M5 12h14" /></Icon><span>Conectar {label}</span></button>;
+  const allAccounts = [...instagramAccounts, ...tiktokAccounts];
+
   return <StudioShell active="cuentas">
-    <PageIntro title="Cuentas" subtitle="Conecta las cuentas profesionales donde publicarás tus piezas." />
+    <PageIntro title="Cuentas" subtitle="Conecta las cuentas donde publicarás tus piezas." />
     {notice && <p className="content-feedback" role="status">{notice}</p>}
     {accountError && <p className="content-feedback" role="alert">{accountError}</p>}
-    <section className="account-overview"><span className="overview-icon"><Icon><circle cx="9" cy="8" r="3" /><path d="M3 20v-1a6 6 0 0 1 12 0v1M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4.6V20" /></Icon></span><div><strong>Instagram</strong><p>Puedes conectar varias cuentas profesionales, una por una.</p></div>{configured ? <a className="primary-button" href="/api/social/instagram/connect"><Icon><path d="M12 5v14M5 12h14" /></Icon><span>{instagramAccounts.length ? "Añadir cuenta" : "Conectar Instagram"}</span></a> : <button className="primary-button" type="button" disabled><Icon><path d="M12 5v14M5 12h14" /></Icon><span>Conectar Instagram</span></button>}</section>
-    {!configured && <div className="social-config-note"><strong>Falta configurar la aplicación de Meta</strong><p>En los secretos del Worker añade <code>INSTAGRAM_APP_ID</code>, <code>INSTAGRAM_APP_SECRET</code> y <code>INSTAGRAM_TOKEN_ENCRYPTION_KEY</code>. La versión Graph usa <code>v27.0</code> si no defines una propia; <code>PUBLIC_APP_URL</code> es opcional.</p><p>Agrega esta URI exacta en el inicio de sesión de Instagram dentro de Meta: <code>{window.location.origin}/api/social/instagram/callback</code>.</p><p>En modo desarrollo, añade cada cuenta como tester de Instagram y acepta la invitación. Solo se admiten cuentas profesionales.</p></div>}
+    <section className="account-overview"><span className="overview-icon"><SocialIcon platform="Instagram" /></span><div><strong>Instagram</strong><p>Puedes conectar varias cuentas profesionales, una por una.</p></div>{connectButton("instagram", "Instagram", instagramAccounts.length)}</section>
+    {!configured.instagram && <div className="social-config-note"><strong>Falta configurar la aplicación de Meta</strong><p>En los secretos del Worker añade <code>INSTAGRAM_APP_ID</code>, <code>INSTAGRAM_APP_SECRET</code> y <code>INSTAGRAM_TOKEN_ENCRYPTION_KEY</code> (o <code>TOKEN_ENCRYPTION_KEY</code>). La versión Graph usa <code>v27.0</code> si no defines una propia; <code>PUBLIC_APP_URL</code> es opcional salvo para publicar de forma programada.</p><p>Agrega esta URI exacta en el inicio de sesión de Instagram dentro de Meta: <code>{window.location.origin}/api/social/instagram/callback</code>.</p><p>En modo desarrollo, añade cada cuenta como tester de Instagram y acepta la invitación. Solo se admiten cuentas profesionales.</p></div>}
+    <section className="account-overview"><span className="overview-icon"><SocialIcon platform="TikTok" /></span><div><strong>TikTok</strong><p>Nex sube el video a tu bandeja de TikTok como borrador. Lo revisas y lo publicas tú desde la app.</p></div>{connectButton("tiktok", "TikTok", tiktokAccounts.length)}</section>
+    {!configured.tiktok && <div className="social-config-note"><strong>Falta configurar la aplicación de TikTok</strong><p>En los secretos del Worker añade <code>TIKTOK_CLIENT_KEY</code>, <code>TIKTOK_CLIENT_SECRET</code>, <code>TOKEN_ENCRYPTION_KEY</code> (o <code>INSTAGRAM_TOKEN_ENCRYPTION_KEY</code>) y <code>PUBLIC_APP_URL</code> con el origen público HTTPS de Nex.</p><p>En TikTok for Developers activa Login Kit y Content Posting API con el permiso <code>video.upload</code>, y registra esta URI de redirección exacta: <code>{(window.location.origin)}/api/social/tiktok/callback</code>.</p><p>Si la app está en modo sandbox, añade tu cuenta de TikTok como usuario de prueba.</p></div>}
     <PageSection title="Cuentas conectadas" detail="Cada autorización se guarda de forma independiente en tu estudio.">
-      {instagramAccounts.length === 0 ? <p className="content-empty">Aún no hay cuentas de Instagram conectadas.</p> : <ul className="account-list">
-        {instagramAccounts.map((account) => <li className="account-row" key={account.id}><div className="account-social account-social-instagram"><SocialIcon platform="Instagram" /></div><div className="account-identity"><strong>{account.handle}</strong><span>Instagram · Cuenta profesional</span></div><div className="account-purpose">Publicaciones y Reels</div><span className={`account-status${account.status !== "conectada" ? " account-status-muted" : ""}`}><i />{account.status === "conectada" ? "Conectada" : "Desconectada"}</span></li>)}
+      {allAccounts.length === 0 ? <p className="content-empty">Aún no hay cuentas conectadas.</p> : <ul className="account-list">
+        {allAccounts.map((account) => <li className="account-row" key={account.id}><div className={"account-social account-social-" + account.platform.toLowerCase()}><SocialIcon platform={account.platform} /></div><div className="account-identity"><strong>{account.handle}</strong><span>{account.platform === "TikTok" ? "TikTok · Borradores en la bandeja" : "Instagram · Cuenta profesional"}</span></div><div className="account-purpose">{account.platform === "TikTok" ? "Videos como borrador" : "Publicaciones y Reels"}</div><span className={`account-status${account.status !== "conectada" ? " account-status-muted" : ""}`}><i />{account.status === "conectada" ? "Conectada" : "Desconectada"}</span></li>)}
       </ul>}
     </PageSection>
-    {instagramAccounts.filter((account) => account.status === "conectada").map((account) => <div className="account-disconnect-row" key={account.id}><span>Token cifrado en D1 · autorización hasta {account.token_expires_at ? new Date(account.token_expires_at).toLocaleDateString("es-EC") : "sin fecha"}</span><button className="quiet-button" type="button" onClick={() => void disconnectInstagram(account)}>Desconectar {account.handle}</button></div>)}
-    <div className="permission-note"><Icon><path d="M12 3 4 6v5c0 5 3.4 8 8 10 4.6-2 8-5 8-10V6z" /><path d="M9 12h6M12 9v6" /></Icon><p><strong>Permisos solicitados</strong><span>Instagram básico y publicación de contenido para leer la cuenta y publicar Reels cuando lo confirmes.</span></p></div>
+    {allAccounts.filter((account) => account.status === "conectada").map((account) => <div className="account-disconnect-row" key={account.id}><span>Token cifrado en D1 · {account.platform === "TikTok" ? "se renueva solo hasta " : "autorización hasta "}{account.token_expires_at && account.platform !== "TikTok" ? new Date(account.token_expires_at).toLocaleDateString("es-EC") : account.platform === "TikTok" ? "que lo revoques" : "sin fecha"}</span><button className="quiet-button" type="button" onClick={() => void disconnectAccount(account)}>Desconectar {account.handle}</button></div>)}
+    <div className="permission-note"><Icon><path d="M12 3 4 6v5c0 5 3.4 8 8 10 4.6-2 8-5 8-10V6z" /><path d="M9 12h6M12 9v6" /></Icon><p><strong>Permisos solicitados</strong><span>Instagram: lectura básica y publicación de contenido para publicar Reels cuando lo confirmes. TikTok: perfil básico y subida de videos a tu bandeja; Nex nunca publica en TikTok por su cuenta.</span></p></div>
   </StudioShell>;
 }
 

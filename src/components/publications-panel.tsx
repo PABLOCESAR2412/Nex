@@ -50,7 +50,9 @@ export function PublicationsPanel({ item, accounts, onChanged }: { item: Content
   }, [hasOpen, reload, onChanged]);
 
   const isVideo = ["video/mp4", "video/quicktime"].includes(item.asset_content_type ?? "");
-  const canSchedule = isVideo && SCHEDULABLE_STATES.includes(item.state) && accounts.length > 0;
+  const connectedAccounts = accounts.filter((account) => account.status === "conectada");
+  const canSchedule = isVideo && SCHEDULABLE_STATES.includes(item.state) && connectedAccounts.length > 0;
+  const tiktokSelected = connectedAccounts.some((account) => account.platform === "TikTok" && selected.includes(account.id));
   if (!canSchedule && publications.length === 0) return null;
 
   async function schedule(event: React.FormEvent) {
@@ -60,7 +62,7 @@ export function PublicationsPanel({ item, accounts, onChanged }: { item: Content
       setMessage("Elige al menos una cuenta y una fecha.");
       return;
     }
-    const handles = accounts.filter((account) => selected.includes(account.id)).map((account) => account.platform + " " + account.handle).join(", ");
+    const handles = connectedAccounts.filter((account) => selected.includes(account.id)).map((account) => account.platform + " " + account.handle).join(", ");
     if (!window.confirm("¿Programar “" + item.title + "” para " + formatWhen(date.toISOString()) + " en " + handles + "? Nex lo enviará solo a esa hora.")) return;
     setBusy(true);
     setMessage(null);
@@ -99,13 +101,14 @@ export function PublicationsPanel({ item, accounts, onChanged }: { item: Content
         <span>{publication.platform} {publication.handle}</span>
         <time dateTime={publication.scheduled_at}>{formatWhen(publication.scheduled_at)}</time>
         {publication.error && <small role="alert">{publication.error}</small>}
+        {publication.status === "borrador_enviado" && <small>Abre TikTok, revisa el borrador de tu bandeja y publícalo desde la app.</small>}
         {publication.status === "programada" && <button className="quiet-button" type="button" disabled={busy} onClick={() => void cancel(publication)}>Cancelar</button>}
       </li>)}
     </ul>}
     {canSchedule && <form className="publication-form" onSubmit={schedule}>
       <fieldset disabled={busy}>
         <legend>Programar en cuentas</legend>
-        {accounts.map((account) => <label key={account.id} className="publication-account">
+        {connectedAccounts.map((account) => <label key={account.id} className="publication-account">
           <input type="checkbox" checked={selected.includes(account.id)} onChange={(event) => setSelected((current) => event.target.checked ? [...current, account.id] : current.filter((id) => id !== account.id))} />
           {account.platform} {account.handle}
         </label>)}
@@ -113,6 +116,7 @@ export function PublicationsPanel({ item, accounts, onChanged }: { item: Content
         <button className="quiet-button" type="submit">{busy ? "Programando…" : "Programar publicación"}</button>
       </fieldset>
       <p className="publication-hint">La fecha de arriba solo mueve la pieza en el calendario; esta publica de verdad.</p>
+      {tiktokSelected && <p className="publication-hint">En TikTok, Nex envía el video a tu bandeja como borrador a esa hora. La descripción y la publicación final las haces tú en la app.</p>}
     </form>}
     {message && <p className="content-feedback" role="status">{message}</p>}
   </section>;

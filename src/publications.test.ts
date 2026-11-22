@@ -129,12 +129,21 @@ describe("ciclo del cron", () => {
     expect(await publicationRow(publication.id)).toMatchObject({ status: "en_curso", job_id: "job-1" });
   });
 
-  it("marca como publicada cuando la red lo confirma y libera la pieza", async () => {
+  it("marca como publicada cuando la red lo confirma y la pieza pasa a publicada", async () => {
     fakeAdapter({ check: vi.fn(async () => ({ status: "publicada" as const })) });
     const { contentId, publication } = await scheduled();
     await makeDue();
     expect(await runPublicationCycle()).toEqual({ started: 1, settled: 1 });
     expect((await publicationRow(publication.id))?.status).toBe("publicada");
+    expect(await contentRow(contentId)).toEqual({ state: "publicada", scheduled_at: null });
+  });
+
+  it("un borrador enviado a la bandeja no marca la pieza como publicada", async () => {
+    fakeAdapter({ check: vi.fn(async () => ({ status: "borrador_enviado" as const })) });
+    const { contentId, publication } = await scheduled();
+    await makeDue();
+    await runPublicationCycle();
+    expect((await publicationRow(publication.id))?.status).toBe("borrador_enviado");
     expect(await contentRow(contentId)).toEqual({ state: "aprobada", scheduled_at: null });
   });
 
