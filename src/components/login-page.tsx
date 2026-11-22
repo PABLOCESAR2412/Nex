@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { loginFn, registerFn } from "../lib/auth";
+import { useEffect, useState } from "react";
+import { loginFn, registerFn, registrationOpenFn } from "../lib/auth";
 
 export function LoginPage() {
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -8,6 +8,13 @@ export function LoginPage() {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [registrationOpen, setRegistrationOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    registrationOpenFn().then((result) => { if (!cancelled) setRegistrationOpen(result.open); }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -52,9 +59,11 @@ export function LoginPage() {
         <button className="primary-button" type="submit" disabled={loading}>
           {loading ? "Procesando…" : mode === "login" ? "Entrar" : "Crear cuenta"}
         </button>
-        <button type="button" className="quiet-button" onClick={() => setMode(mode === "login" ? "register" : "login")}>
-          {mode === "login" ? "¿No tienes cuenta? Regístrate" : "¿Ya tienes cuenta? Inicia sesión"}
-        </button>
+        {(registrationOpen || mode === "register") && (
+          <button type="button" className="quiet-button" onClick={() => setMode(mode === "login" ? "register" : "login")}>
+            {mode === "login" ? "¿No tienes cuenta? Regístrate" : "¿Ya tienes cuenta? Inicia sesión"}
+          </button>
+        )}
       </form>
     </main>
   );

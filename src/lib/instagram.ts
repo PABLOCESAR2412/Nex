@@ -14,7 +14,6 @@ export function instagramConfig(requestOrigin?: string) {
   if (textEncoder.encode(encryptionSecret).length < 32) {
     throw new Error("INSTAGRAM_TOKEN_ENCRYPTION_KEY debe tener al menos 32 bytes.");
   }
-  const publicUrl = new URL(publicAppUrl);
   if (publicAppUrl) {
     const publicUrl = new URL(publicAppUrl);
     if (publicUrl.pathname !== "/" || publicUrl.search || publicUrl.hash) {

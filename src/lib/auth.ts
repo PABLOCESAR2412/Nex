@@ -1,7 +1,7 @@
 // src/lib/auth.ts
 import { createMiddleware, createServerFn, createServerOnlyFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { getDb, newId } from "./db";
+import { getDb, getRuntimeEnv, newId } from "./db";
 import { readSessionToken, setSessionCookie, clearSessionCookie } from "./session";
 import { hashPassword, verifyPassword } from "./password";
 
@@ -30,24 +30,45 @@ export const authMiddleware = createMiddleware({ type: "function" }).server(asyn
 });
 
 // Register
+// El registro queda cerrado en cuanto existe un usuario (el propietario): Nex es un estudio personal y quien
+// se registre vería el panel de gestión. Para abrirlo de nuevo, define ALLOW_REGISTRATION=true.
+function registrationAlwaysOpen() {
+  return ["true", "1"].includes(getRuntimeEnv().ALLOW_REGISTRATION?.trim().toLowerCase() ?? "");
+}
+
+const registrationOpen = createServerOnlyFn(async () => {
+  if (registrationAlwaysOpen()) return true;
+  return !(await getDb().prepare("SELECT id FROM users LIMIT 1").first());
+});
+
+export const registrationOpenFn = createServerFn({ method: "GET" }).handler(async () => ({ open: await registrationOpen() }));
+
+const REGISTRATION_CLOSED = "El registro está cerrado. Pide acceso a quien administra este Nex.";
+
+export const createUserAccount = createServerOnlyFn(async (data: { email: string; password: string; name?: string }) => {
+  if (!(await registrationOpen())) throw new Error(REGISTRATION_CLOSED);
+  const db = getDb();
+  const existing = await db.prepare("SELECT id FROM users WHERE email = ?").bind(data.email).first();
+  if (existing) throw new Error("Ese correo ya tiene una cuenta.");
+  const id = newId();
+  const passwordHash = await hashPassword(data.password);
+  // Con el registro cerrado, el INSERT solo ocurre si sigue sin haber usuarios: dos registros simultáneos no crean dos propietarios.
+  const inserted = registrationAlwaysOpen()
+    ? await db.prepare("INSERT INTO users (id, email, password_hash, name) VALUES (?, ?, ?, ?)").bind(id, data.email, passwordHash, data.name ?? null).run()
+    : await db.prepare("INSERT INTO users (id, email, password_hash, name) SELECT ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM users)").bind(id, data.email, passwordHash, data.name ?? null).run();
+  if (!inserted.meta.changes) throw new Error(REGISTRATION_CLOSED);
+  const token = newId();
+  const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  await db.prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)").bind(token, id, expires).run();
+  return { userId: id, token };
+});
+
 export const registerFn = createServerFn({ method: "POST" })
   .validator(z.object({ email: z.string().email(), password: z.string().min(8), name: z.string().optional() }))
   .handler(async ({ data }) => {
-    const db = getDb();
-    const existing = await db.prepare("SELECT id FROM users WHERE email = ?").bind(data.email).first();
-    if (existing) throw new Error("Ese correo ya tiene una cuenta.");
-    const id = newId();
-    const passwordHash = await hashPassword(data.password);
-    await db
-      .prepare("INSERT INTO users (id, email, password_hash, name) VALUES (?, ?, ?, ?)")
-      .bind(id, data.email, passwordHash, data.name ?? null)
-      .run();
-    // revoke existing sessions (none) and create new
-    const token = newId();
-    const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-    await db.prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)").bind(token, id, expires).run();
+    const { userId, token } = await createUserAccount(data);
     setSessionCookie(token);
-    return { ok: true, userId: id };
+    return { ok: true, userId };
   });
 
 // Login

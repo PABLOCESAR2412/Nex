@@ -19,6 +19,7 @@ export type RuntimeEnv = {
   TOKEN_ENCRYPTION_KEY?: string;
   TIKTOK_CLIENT_KEY?: string;
   TIKTOK_CLIENT_SECRET?: string;
+  ALLOW_REGISTRATION?: string;
   PUBLIC_APP_URL?: string;
 };
 
@@ -41,6 +42,7 @@ interface __BaseEnv_Env {
   TOKEN_ENCRYPTION_KEY?: string;
   TIKTOK_CLIENT_KEY?: string;
   TIKTOK_CLIENT_SECRET?: string;
+  ALLOW_REGISTRATION?: string;
   PUBLIC_APP_URL?: string;
 }
 
