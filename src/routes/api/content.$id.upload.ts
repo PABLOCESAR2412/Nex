@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getAssets, getDb, newId } from "../../lib/db";
-import { getRequestUserId } from "../../lib/mcp";
+import { getRequestAuth, hasScope } from "../../lib/mcp";
 
 const PART_SIZE = 8 * 1024 * 1024;
 const MAX_FILE_SIZE = 5 * 1024 * 1024 * 1024;
@@ -32,8 +32,10 @@ export const Route = createFileRoute("/api/content/$id/upload")({
   server: {
     handlers: {
       POST: async ({ request, params }) => {
-        const userId = await getRequestUserId(request);
-        if (!userId) return jsonError("Inicia sesión o usa una clave MCP válida para subir archivos.", 401);
+        const auth = await getRequestAuth(request);
+        if (!auth) return jsonError("Inicia sesión o usa una clave MCP válida para subir archivos.", 401);
+        if (!hasScope(auth, "content:write")) return jsonError("Esta clave MCP no tiene el permiso content:write para subir archivos.", 403);
+        const userId = auth.userId;
 
         const db = getDb();
         const content = await db
@@ -157,8 +159,10 @@ export const Route = createFileRoute("/api/content/$id/upload")({
         return jsonError("Acción de carga desconocida.", 400);
       },
       PUT: async ({ request, params }) => {
-        const userId = await getRequestUserId(request);
-        if (!userId) return jsonError("Inicia sesión o usa una clave MCP válida para subir archivos.", 401);
+        const auth = await getRequestAuth(request);
+        if (!auth) return jsonError("Inicia sesión o usa una clave MCP válida para subir archivos.", 401);
+        if (!hasScope(auth, "content:write")) return jsonError("Esta clave MCP no tiene el permiso content:write para subir archivos.", 403);
+        const userId = auth.userId;
 
         const url = new URL(request.url);
         if (request.method === "POST" && !["start", "complete", "abort"].includes(url.searchParams.get("action") ?? "")) {

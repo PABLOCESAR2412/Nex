@@ -1,7 +1,7 @@
 import { Fragment, type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { meFn, logoutFn } from "../lib/auth";
-import { createMcpTokenFn, listMcpTokensFn, revokeMcpTokenFn, type McpTokenSummary } from "../lib/mcp";
+import { createMcpTokenFn, listMcpTokensFn, MCP_SCOPES, MCP_SCOPE_LABELS, parseScopes, revokeMcpTokenFn, type McpScope, type McpTokenSummary } from "../lib/mcp";
 
 type ViewKey = "inicio" | "calendario" | "biblioteca" | "cuentas" | "despliegues" | "ajustes";
 type Theme = "dark" | "light";
@@ -15,6 +15,8 @@ const navigation: Array<{ key: ViewKey; label: string; href: string; icon: React
   { key: "ajustes", label: "Ajustes", href: "/ajustes", icon: <><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" /><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.8-.6a8 8 0 0 1-1.5.9l-.4 1.9h-2.8l-.4-1.9a8 8 0 0 1-1.5-.9l-1.8.6-1.4-2.4 1.4-1.1a7.4 7.4 0 0 1 0-1.8l-1.4-1.1 1.4-2.4 1.8.6a8 8 0 0 1 1.5-.9l.4-1.9h2.8l.4 1.9a8 8 0 0 1 1.5.9l1.8-.6 1.4 2.4-1.4 1.1a7.4 7.4 0 0 1 0 1.7Z" transform="translate(-2 -2)" /></> },
 ];
 
+const SCOPE_SHORT: Record<McpScope, string> = { "content:read": "leer", "content:write": "escribir", publish: "publicar" };
+
 function McpConnectionDialog({ onClose }: { onClose: () => void }) {
   const dialogRef = useRef<HTMLElement>(null);
   const [tokens, setTokens] = useState<McpTokenSummary[]>([]);
@@ -23,6 +25,7 @@ function McpConnectionDialog({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [scopes, setScopes] = useState<McpScope[]>([...MCP_SCOPES]);
 
   async function refresh() {
     const result = await listMcpTokensFn();
@@ -67,7 +70,7 @@ function McpConnectionDialog({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      const result = await createMcpTokenFn({ data: { label: "Hermes" } });
+      const result = await createMcpTokenFn({ data: { label: "Hermes", scopes } });
       setNewToken(result.token);
       await refresh();
     } catch (cause) {
@@ -78,7 +81,7 @@ function McpConnectionDialog({ onClose }: { onClose: () => void }) {
   }
 
   async function revoke(token: McpTokenSummary) {
-    if (!window.confirm(`¿Revocar la conexión “${token.label}”? Hermes dejará de tener acceso.`)) return;
+    if (!window.confirm(`¿Revocar la conexión “${token.label}”? Dejará de tener acceso.`)) return;
     setBusy(true);
     setError(null);
     try {
@@ -107,12 +110,15 @@ function McpConnectionDialog({ onClose }: { onClose: () => void }) {
 
   return <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section ref={dialogRef} className="mcp-dialog" role="dialog" aria-modal="true" aria-labelledby="mcp-dialog-title">
-      <div className="mcp-dialog-heading"><div><h2 id="mcp-dialog-title">Conectar Hermes con Nex</h2><p>Hermes podrá consultar la biblioteca, crear borradores, programar y publicar Reels con aprobación.</p></div><button className="icon-button" type="button" onClick={onClose} aria-label="Cerrar"><Icon><path d="m6 6 12 12M18 6 6 18" /></Icon></button></div>
+      <div className="mcp-dialog-heading"><div><h2 id="mcp-dialog-title">Conectar tu IA con Nex</h2><p>Un agente (Hermes, Claude, ChatGPT u otro cliente MCP) podrá consultar la biblioteca, crear borradores, subir videos y programar publicaciones según los permisos que elijas.</p></div><button className="icon-button" type="button" onClick={onClose} aria-label="Cerrar"><Icon><path d="m6 6 12 12M18 6 6 18" /></Icon></button></div>
       {error && <p className="content-feedback" role="alert">{error}</p>}
-      {newToken ? <div className="mcp-new-key"><strong>Guarda esta configuración ahora</strong><p>La clave solo se muestra esta vez. No la compartas y pégala en la configuración de Hermes.</p><pre>{config}</pre><button className="primary-button" type="button" onClick={() => void copyConfig()}>{copied ? "Copiado" : "Copiar configuración"}</button></div> : <div className="mcp-existing-keys">
-        {loading ? <p>Cargando conexiones…</p> : tokens.length === 0 ? <p>Aún no hay conexiones de Hermes activas.</p> : tokens.map((token) => <div className="mcp-key-row" key={token.id}><div><strong>{token.label}</strong><small>Creada {new Date(token.created_at.replace(" ", "T") + (token.created_at.endsWith("Z") ? "" : "Z")).toLocaleDateString("es-EC")} · {token.last_used_at ? `Último uso ${new Date(token.last_used_at.replace(" ", "T") + (token.last_used_at.endsWith("Z") ? "" : "Z")).toLocaleString("es-EC")}` : "Aún sin uso"}</small></div><button className="quiet-button" type="button" disabled={busy} onClick={() => void revoke(token)}>Revocar</button></div>)}
-        <div className="mcp-connect-notes"><strong>Permisos de Hermes</strong><p>La conexión usa una clave revocable. En Hermes queda marcada como no confiable para pedir aprobación antes de herramientas que cambian datos o publican.</p></div>
-        <button className="primary-button" type="button" disabled={busy || loading} onClick={() => void createConnection()}>{busy ? "Preparando…" : tokens.length ? "Crear otra conexión" : "Crear conexión para Hermes"}</button>
+      {newToken ? <div className="mcp-new-key"><strong>Guarda esta configuración ahora</strong><p>La clave solo se muestra esta vez. No la compartas y pégala en la configuración de tu cliente MCP.</p><pre>{config}</pre><p>Para otros clientes usa la URL <code>{url}</code> y la cabecera <code>Authorization: Bearer &lt;clave&gt;</code>.</p><button className="primary-button" type="button" onClick={() => void copyConfig()}>{copied ? "Copiado" : "Copiar configuración"}</button></div> : <div className="mcp-existing-keys">
+        {loading ? <p>Cargando conexiones…</p> : tokens.length === 0 ? <p>Aún no hay conexiones activas.</p> : tokens.map((token) => <div className="mcp-key-row" key={token.id}><div><strong>{token.label}</strong><small>{token.oauth ? "Autorizada con inicio de sesión · " : ""}{parseScopes(token.scopes).map((scope) => SCOPE_SHORT[scope]).join(", ") || "sin permisos"} · Creada {new Date(token.created_at.replace(" ", "T") + (token.created_at.endsWith("Z") ? "" : "Z")).toLocaleDateString("es-EC")} · {token.last_used_at ? `Último uso ${new Date(token.last_used_at.replace(" ", "T") + (token.last_used_at.endsWith("Z") ? "" : "Z")).toLocaleString("es-EC")}` : "Aún sin uso"}</small></div><button className="quiet-button" type="button" disabled={busy} onClick={() => void revoke(token)}>Revocar</button></div>)}
+        <fieldset className="mcp-scopes"><legend>Permisos de la nueva clave</legend>
+          {MCP_SCOPES.map((scope) => <label key={scope}><input type="checkbox" checked={scopes.includes(scope)} onChange={(event) => setScopes((current) => event.target.checked ? [...current, scope] : current.filter((item) => item !== scope))} /><span>{MCP_SCOPE_LABELS[scope]}</span></label>)}
+        </fieldset>
+        <div className="mcp-connect-notes"><strong>Cómo se conecta</strong><p>La clave es revocable y solo la ve quien la crea. En Hermes queda marcada como no confiable para pedir aprobación antes de herramientas que cambian datos o publican. Los clientes que inician sesión por su cuenta pueden usar la URL <code>{url}</code>: Nex les pedirá tu autorización.</p></div>
+        <button className="primary-button" type="button" disabled={busy || loading || scopes.length === 0} onClick={() => void createConnection()}>{busy ? "Preparando…" : tokens.length ? "Crear otra conexión" : "Crear conexión"}</button>
       </div>}
       <button className="quiet-button mcp-close" type="button" onClick={onClose}>Cerrar</button>
     </section>

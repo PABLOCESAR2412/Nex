@@ -8,10 +8,10 @@ export async function seedUser(db: D1Database, email = "pablo@example.test") {
 }
 
 /** Crea una clave MCP y devuelve el valor en claro, como lo vería el harness. */
-export async function seedMcpToken(db: D1Database, userId: string, label = "Hermes") {
+export async function seedMcpToken(db: D1Database, userId: string, label = "Hermes", scopes?: string) {
   const token = "nex_live_" + randomSecret();
-  await db.prepare("INSERT INTO mcp_tokens (id, user_id, token_hash, label) VALUES (?, ?, ?, ?)")
-    .bind(newId(), userId, await sha256Hex(token), label)
+  await db.prepare("INSERT INTO mcp_tokens (id, user_id, token_hash, label, scopes) VALUES (?, ?, ?, ?, COALESCE(?, 'content:read content:write publish'))")
+    .bind(newId(), userId, await sha256Hex(token), label, scopes ?? null)
     .run();
   return token;
 }

@@ -1,11 +1,39 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { getAssets, getDb, newId } from "../../lib/db";
-import { getMcpUserId } from "../../lib/mcp";
+import { getMcpAuth, hasScope, type McpAuth, type McpScope } from "../../lib/mcp";
+import { publicOrigin, resourceMetadataUrl } from "../../lib/oauth";
 import { handleInstagramPublishRequest } from "../../lib/instagram-publish";
 import { cancelPublication, listPublications, schedulePublications } from "../../lib/publications";
 
 const MAX_URL_UPLOAD_BYTES = 1_000_000_000;
+
+// Versiones del protocolo que este servidor entiende: solo usa herramientas con respuestas JSON, igual en todas.
+const SUPPORTED_PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
+
+/** Permiso que exige cada herramienta. schedule_content con account_ids exige además «publish». */
+const TOOL_SCOPES: Record<string, McpScope> = {
+  list_content: "content:read",
+  list_social_accounts: "content:read",
+  list_publications: "content:read",
+  list_instagram_accounts: "content:read",
+  create_content: "content:write",
+  upload_content_from_url: "content:write",
+  schedule_content: "content:write",
+  cancel_publication: "publish",
+  publish_instagram_reel: "publish",
+  check_instagram_publish: "publish",
+};
+
+function canUseTool(auth: McpAuth, name: string) {
+  const required = TOOL_SCOPES[name];
+  return !required || hasScope(auth, required);
+}
+
+function unauthorized(request: Request, tokenPresented: boolean) {
+  const challenge = 'Bearer realm="Nex MCP", resource_metadata="' + resourceMetadataUrl(publicOrigin(request)) + '"' + (tokenPresented ? ', error="invalid_token"' : "");
+  return Response.json({ error: "Clave MCP inválida, vencida o revocada." }, { status: 401, headers: { "www-authenticate": challenge, "cache-control": "no-store" } });
+}
 
 const TOOLS = [
   {
@@ -155,12 +183,13 @@ export const Route = createFileRoute("/api/mcp")({
           return Response.json({ error: "Origin not allowed." }, { status: 403, headers: { "cache-control": "no-store" } });
         }
 
-        const userId = await getMcpUserId(request);
-        if (!userId) {
-          return Response.json({ error: "Clave MCP inválida o revocada." }, {
-            status: 401,
-            headers: { "www-authenticate": 'Bearer realm="Nex MCP"', "cache-control": "no-store" },
-          });
+        const auth = await getMcpAuth(request);
+        if (!auth) return unauthorized(request, !!request.headers.get("authorization"));
+        const userId = auth.userId;
+
+        const protocolHeader = request.headers.get("mcp-protocol-version");
+        if (protocolHeader && !SUPPORTED_PROTOCOL_VERSIONS.includes(protocolHeader)) {
+          return Response.json({ error: "Versión del protocolo MCP no admitida.", supported: SUPPORTED_PROTOCOL_VERSIONS }, { status: 400, headers: { "cache-control": "no-store" } });
         }
 
         let body: { jsonrpc?: unknown; method?: unknown; params?: unknown; id?: unknown };
@@ -172,20 +201,25 @@ export const Route = createFileRoute("/api/mcp")({
         if (method.startsWith("notifications/")) return new Response(null, { status: 202, headers: { "cache-control": "no-store" } });
 
         if (method === "initialize") {
+          const requestedVersion = (params as { protocolVersion?: unknown } | null)?.protocolVersion;
           return response(id, {
-            protocolVersion: "2025-11-25",
+            // Si el cliente pide una versión que conocemos, se usa; si no, respondemos con la más reciente y él decide si la acepta.
+            protocolVersion: typeof requestedVersion === "string" && SUPPORTED_PROTOCOL_VERSIONS.includes(requestedVersion) ? requestedVersion : SUPPORTED_PROTOCOL_VERSIONS[0],
             capabilities: { tools: { listChanged: false } },
             serverInfo: { name: "nex", version: "1.0.0" },
             instructions: "Nex gestiona piezas, calendario y cuentas sociales del usuario. Las publicaciones públicas requieren petición y confirmación explícitas del usuario. Para adjuntar un archivo local a una pieza (cualquier tamaño hasta 5 GiB), descarga " + new URL(request.url).origin + "/nex-upload.mjs y ejecútalo con Node 18 o superior: NEX_URL=" + new URL(request.url).origin + " NEX_TOKEN=<la misma clave MCP> node nex-upload.mjs <content_id> <archivo>. Si el video ya está en una URL HTTPS pública usa upload_content_from_url.",
           });
         }
         if (method === "ping") return response(id, {});
-        if (method === "tools/list") return response(id, { tools: TOOLS });
+        if (method === "tools/list") return response(id, { tools: TOOLS.filter((tool) => canUseTool(auth, tool.name)) });
         if (method !== "tools/call") return rpcError(id, -32601, `Unknown method: ${method}`);
 
         const call = params as { name?: unknown; arguments?: unknown } | null;
         const toolName = call?.name;
         const args = (call?.arguments && typeof call.arguments === "object" ? call.arguments : {}) as Record<string, unknown>;
+        if (typeof toolName === "string" && toolName in TOOL_SCOPES && !canUseTool(auth, toolName)) {
+          return toolResult(id, "Esta conexión no tiene el permiso «" + TOOL_SCOPES[toolName] + "» que pide " + toolName + ". El usuario puede crear otra clave o volver a autorizar la conexión con ese permiso en Nex.", true);
+        }
         try {
           if (toolName === "list_content") {
             const { results } = await getDb()
@@ -276,6 +310,7 @@ export const Route = createFileRoute("/api/mcp")({
             if (args.account_ids !== undefined) {
               const accountIds = z.array(z.string().min(1)).min(1).max(10).safeParse(args.account_ids);
               if (!accountIds.success) return rpcError(id, -32602, "account_ids must list 1 to 10 account IDs from list_social_accounts.");
+              if (!hasScope(auth, "publish")) return toolResult(id, "Programar publicaciones en cuentas exige el permiso «publish». Esta conexión solo puede colocar piezas en el calendario (sin account_ids).", true);
               const publications = await schedulePublications(userId, { contentId: args.id, accountIds: accountIds.data, scheduledAt: date.toISOString() });
               return toolResult(id, { ok: true, id: args.id, scheduled_at: date.toISOString(), publications });
             }
@@ -335,9 +370,7 @@ export const Route = createFileRoute("/api/mcp")({
       GET: async ({ request }) => {
         const origin = request.headers.get("origin");
         if (origin && origin !== new URL(request.url).origin) return new Response(null, { status: 403 });
-        if (!await getMcpUserId(request)) {
-          return new Response(null, { status: 401, headers: { "www-authenticate": 'Bearer realm="Nex MCP"' } });
-        }
+        if (!await getMcpAuth(request)) return unauthorized(request, !!request.headers.get("authorization"));
         return new Response(null, { status: 405, headers: { allow: "POST", "cache-control": "no-store" } });
       },
     },
