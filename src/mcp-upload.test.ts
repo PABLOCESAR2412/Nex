@@ -154,6 +154,12 @@ describe("instrucciones del servidor MCP", () => {
     const { body } = await rpc("initialize", {});
     expect(body.result?.instructions).toContain("https://nex.test/nex-upload.mjs");
   });
+
+  it("explican que en TikTok el video llega como borrador y que los permisos vienen por clave", async () => {
+    const { body } = await rpc("initialize", {});
+    expect(body.result?.instructions).toMatch(/TikTok.*borrador/s);
+    expect(body.result?.instructions).toContain("permiso");
+  });
 });
 
 describe("scripts de subida para harness locales (public/nex-upload.mjs)", () => {

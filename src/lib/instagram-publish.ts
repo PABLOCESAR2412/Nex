@@ -179,8 +179,9 @@ export const handleInstagramPublishRequest = createServerOnlyFn(async (request: 
             await db.batch([
               db.prepare("UPDATE instagram_publish_jobs SET status = 'published', media_id = ?, error = NULL, updated_at = datetime('now') WHERE id = ? AND user_id = ?")
                 .bind(published.id, job.id, session.userId),
-              db.prepare("UPDATE content_items SET state = 'publicada', scheduled_at = NULL, updated_at = datetime('now') WHERE id = ? AND user_id = ?")
-                .bind(job.content_id, session.userId),
+              // La fecha pendiente de otras redes (p. ej. un borrador de TikTok aún programado) se conserva en el calendario.
+              db.prepare("UPDATE content_items SET state = 'publicada', scheduled_at = (SELECT MIN(scheduled_at) FROM publications WHERE content_id = ? AND status = 'programada'), updated_at = datetime('now') WHERE id = ? AND user_id = ?")
+                .bind(job.content_id, job.content_id, session.userId),
               db.prepare("DELETE FROM instagram_media_grants WHERE user_id = ? AND content_id = ?")
                 .bind(session.userId, job.content_id),
             ]);

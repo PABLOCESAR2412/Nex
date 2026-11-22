@@ -52,10 +52,12 @@ export const getMcpAuth = createServerOnlyFn(async (request: Request): Promise<M
 });
 
 /**
- * Quién hace una petición HTTP: la sesión web (cookie, con todos los permisos) o, si no hay, una clave MCP.
+ * Quién hace una petición HTTP: una clave MCP si la petición trae `Authorization` (y solo con los permisos de
+ * esa clave, aunque el navegador también envíe la cookie de sesión) o, si no, la sesión web con todos los permisos.
  * Lo usan las rutas que un harness también necesita (por ejemplo la subida de archivos).
  */
 export const getRequestAuth = createServerOnlyFn(async (request: Request): Promise<McpAuth | null> => {
+  if (request.headers.get("authorization")) return getMcpAuth(request);
   const session = await getCurrentSession();
   if (session) return { userId: session.userId, scopes: [...MCP_SCOPES], tokenId: null };
   return getMcpAuth(request);

@@ -147,6 +147,32 @@ describe("ciclo del cron", () => {
     expect(await contentRow(contentId)).toEqual({ state: "aprobada", scheduled_at: null });
   });
 
+  it("cuando una red publica, la fecha pendiente de otra red sigue en el calendario", async () => {
+    fakeAdapter({ check: vi.fn(async () => ({ status: "publicada" as const })) });
+    const contentId = await seedContent(testDb.db, userId, approvedVideo());
+    const first = await seedSocialAccount(testDb.db, userId, { platform: "Prueba" });
+    const second = await seedSocialAccount(testDb.db, userId, { platform: "Otra", handle: "@otra" });
+    const later = new Date(Date.now() + 3 * 3_600_000).toISOString();
+    await schedulePublications(userId, { contentId, accountIds: [first], scheduledAt: inOneHour() });
+    await schedulePublications(userId, { contentId, accountIds: [second], scheduledAt: later });
+    await testDb.db.prepare("UPDATE publications SET scheduled_at = '2000-01-01T00:00:00.000Z' WHERE account_id = ?").bind(first).run();
+
+    await runPublicationCycle();
+    expect(await contentRow(contentId)).toEqual({ state: "publicada", scheduled_at: later });
+  });
+
+  it("cancelar una de dos publicaciones deja en el calendario la fecha de la que sigue", async () => {
+    const contentId = await seedContent(testDb.db, userId, approvedVideo());
+    const first = await seedSocialAccount(testDb.db, userId, { platform: "Prueba" });
+    const second = await seedSocialAccount(testDb.db, userId, { platform: "Otra", handle: "@otra" });
+    const later = new Date(Date.now() + 3 * 3_600_000).toISOString();
+    const [early] = await schedulePublications(userId, { contentId, accountIds: [first], scheduledAt: inOneHour() });
+    await schedulePublications(userId, { contentId, accountIds: [second], scheduledAt: later });
+
+    await cancelPublication(userId, early.id);
+    expect(await contentRow(contentId)).toEqual({ state: "programada", scheduled_at: later });
+  });
+
   it("guarda el error si la red rechaza la publicación", async () => {
     fakeAdapter({ start: vi.fn(async () => { throw new Error("La autorización venció."); }) });
     const { publication } = await scheduled();

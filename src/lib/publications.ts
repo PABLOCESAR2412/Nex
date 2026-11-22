@@ -110,11 +110,15 @@ export const cancelPublication = createServerOnlyFn(async (userId: string, id: s
   return { ok: true };
 });
 
-/** Si ya no quedan publicaciones abiertas, la pieza deja de estar «programada» y pierde la fecha pendiente. */
+/**
+ * Sincroniza la pieza con sus publicaciones: la fecha del calendario es la de la próxima publicación todavía
+ * programada (si una red ya publicó, la de otra red sigue visible) y, si no queda ninguna abierta, la pieza
+ * deja de estar «programada» y no conserva fecha pendiente.
+ */
 async function settleContent(contentId: string) {
   await getDb()
-    .prepare("UPDATE content_items SET state = CASE WHEN state = 'programada' THEN 'aprobada' ELSE state END, scheduled_at = NULL, updated_at = datetime('now') WHERE id = ? AND NOT EXISTS (SELECT 1 FROM publications WHERE content_id = ? AND status IN ('programada', 'en_curso'))")
-    .bind(contentId, contentId)
+    .prepare("UPDATE content_items SET state = CASE WHEN state = 'programada' AND NOT EXISTS (SELECT 1 FROM publications WHERE content_id = ? AND status IN ('programada', 'en_curso')) THEN 'aprobada' ELSE state END, scheduled_at = (SELECT MIN(scheduled_at) FROM publications WHERE content_id = ? AND status = 'programada'), updated_at = datetime('now') WHERE id = ?")
+    .bind(contentId, contentId, contentId)
     .run();
 }
 
@@ -126,7 +130,7 @@ async function finish(publication: { id: string; content_id: string }, status: E
     .run();
   // Una publicación confirmada por la red marca la pieza como publicada (Instagram ya lo hace por su cuenta; es idempotente).
   if (status === "publicada") {
-    await db.prepare("UPDATE content_items SET state = 'publicada', scheduled_at = NULL, updated_at = datetime('now') WHERE id = ?").bind(publication.content_id).run();
+    await db.prepare("UPDATE content_items SET state = 'publicada', updated_at = datetime('now') WHERE id = ?").bind(publication.content_id).run();
   }
   await settleContent(publication.content_id);
 }

@@ -76,7 +76,7 @@ const TOOLS = [
   },
   {
     name: "schedule_content",
-    description: "Programa una pieza para una fecha futura. Sin account_ids solo la coloca en el calendario de Nex. Con account_ids (de list_social_accounts) crea una publicación por cuenta que Nex lanzará sola a esa hora: la pieza debe estar aprobada en Nex por el usuario y tener un video MP4/MOV. Usa account_ids solo si el usuario pidió publicar en esas cuentas a esa hora.",
+    description: "Programa una pieza para una fecha futura. Sin account_ids solo la coloca en el calendario de Nex. Con account_ids (de list_social_accounts) crea una publicación por cuenta que Nex lanzará sola a esa hora: la pieza debe estar aprobada en Nex por el usuario y tener un video MP4/MOV. Usa account_ids solo si el usuario pidió publicar en esas cuentas a esa hora. En Instagram se publica el Reel; en TikTok el video se envía como borrador a la bandeja de la cuenta (estado borrador_enviado) y el usuario lo publica desde la app de TikTok.",
     inputSchema: {
       type: "object",
       properties: {
@@ -207,7 +207,7 @@ export const Route = createFileRoute("/api/mcp")({
             protocolVersion: typeof requestedVersion === "string" && SUPPORTED_PROTOCOL_VERSIONS.includes(requestedVersion) ? requestedVersion : SUPPORTED_PROTOCOL_VERSIONS[0],
             capabilities: { tools: { listChanged: false } },
             serverInfo: { name: "nex", version: "1.0.0" },
-            instructions: "Nex gestiona piezas, calendario y cuentas sociales del usuario. Las publicaciones públicas requieren petición y confirmación explícitas del usuario. Para adjuntar un archivo local a una pieza (cualquier tamaño hasta 5 GiB), descarga " + new URL(request.url).origin + "/nex-upload.mjs y ejecútalo con Node 18 o superior: NEX_URL=" + new URL(request.url).origin + " NEX_TOKEN=<la misma clave MCP> node nex-upload.mjs <content_id> <archivo>. Si el video ya está en una URL HTTPS pública usa upload_content_from_url.",
+            instructions: "Nex gestiona piezas, calendario y cuentas sociales del usuario (Instagram y TikTok). Las publicaciones públicas requieren petición y confirmación explícitas del usuario, y solo salen piezas que el usuario aprobó en Nex. Con schedule_content y account_ids Nex lanza cada publicación a su hora: en Instagram se publica el Reel; en TikTok el video llega como borrador a la bandeja de la cuenta (estado borrador_enviado) y el usuario lo publica desde la app de TikTok. El resultado se consulta con list_publications. Si una herramienta responde que falta un permiso, el usuario debe crear otra clave o volver a autorizar la conexión en Nex. Para adjuntar un archivo local a una pieza (cualquier tamaño hasta 5 GiB), descarga " + new URL(request.url).origin + "/nex-upload.mjs y ejecútalo con Node 18 o superior: NEX_URL=" + new URL(request.url).origin + " NEX_TOKEN=<la misma clave MCP> node nex-upload.mjs <content_id> <archivo>. Si el video ya está en una URL HTTPS pública usa upload_content_from_url.",
           });
         }
         if (method === "ping") return response(id, {});

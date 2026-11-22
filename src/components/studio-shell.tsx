@@ -26,6 +26,7 @@ function McpConnectionDialog({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [scopes, setScopes] = useState<McpScope[]>([...MCP_SCOPES]);
+  const [label, setLabel] = useState("");
 
   async function refresh() {
     const result = await listMcpTokensFn();
@@ -70,7 +71,7 @@ function McpConnectionDialog({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      const result = await createMcpTokenFn({ data: { label: "Hermes", scopes } });
+      const result = await createMcpTokenFn({ data: { label: label.trim() || "Mi agente", scopes } });
       setNewToken(result.token);
       await refresh();
     } catch (cause) {
@@ -114,10 +115,11 @@ function McpConnectionDialog({ onClose }: { onClose: () => void }) {
       {error && <p className="content-feedback" role="alert">{error}</p>}
       {newToken ? <div className="mcp-new-key"><strong>Guarda esta configuración ahora</strong><p>La clave solo se muestra esta vez. No la compartas y pégala en la configuración de tu cliente MCP.</p><pre>{config}</pre><p>Para otros clientes usa la URL <code>{url}</code> y la cabecera <code>Authorization: Bearer &lt;clave&gt;</code>.</p><button className="primary-button" type="button" onClick={() => void copyConfig()}>{copied ? "Copiado" : "Copiar configuración"}</button></div> : <div className="mcp-existing-keys">
         {loading ? <p>Cargando conexiones…</p> : tokens.length === 0 ? <p>Aún no hay conexiones activas.</p> : tokens.map((token) => <div className="mcp-key-row" key={token.id}><div><strong>{token.label}</strong><small>{token.oauth ? "Autorizada con inicio de sesión · " : ""}{parseScopes(token.scopes).map((scope) => SCOPE_SHORT[scope]).join(", ") || "sin permisos"} · Creada {new Date(token.created_at.replace(" ", "T") + (token.created_at.endsWith("Z") ? "" : "Z")).toLocaleDateString("es-EC")} · {token.last_used_at ? `Último uso ${new Date(token.last_used_at.replace(" ", "T") + (token.last_used_at.endsWith("Z") ? "" : "Z")).toLocaleString("es-EC")}` : "Aún sin uso"}</small></div><button className="quiet-button" type="button" disabled={busy} onClick={() => void revoke(token)}>Revocar</button></div>)}
+        <label className="mcp-label">Nombre de la nueva clave<input value={label} onChange={(event) => setLabel(event.target.value)} maxLength={60} placeholder="Por ejemplo: Claude, Hermes u OpenCode" /></label>
         <fieldset className="mcp-scopes"><legend>Permisos de la nueva clave</legend>
           {MCP_SCOPES.map((scope) => <label key={scope}><input type="checkbox" checked={scopes.includes(scope)} onChange={(event) => setScopes((current) => event.target.checked ? [...current, scope] : current.filter((item) => item !== scope))} /><span>{MCP_SCOPE_LABELS[scope]}</span></label>)}
         </fieldset>
-        <div className="mcp-connect-notes"><strong>Cómo se conecta</strong><p>La clave es revocable y solo la ve quien la crea. En Hermes queda marcada como no confiable para pedir aprobación antes de herramientas que cambian datos o publican. Los clientes que inician sesión por su cuenta pueden usar la URL <code>{url}</code>: Nex les pedirá tu autorización.</p></div>
+        <div className="mcp-connect-notes"><strong>Cómo se conecta</strong><p>La clave es revocable y solo la ve quien la crea. La configuración para Hermes la marca como no confiable para pedir aprobación antes de herramientas que cambian datos o publican. Los clientes que inician sesión por su cuenta pueden usar la URL <code>{url}</code>: Nex les pedirá tu autorización.</p></div>
         <button className="primary-button" type="button" disabled={busy || loading || scopes.length === 0} onClick={() => void createConnection()}>{busy ? "Preparando…" : tokens.length ? "Crear otra conexión" : "Crear conexión"}</button>
       </div>}
       <button className="quiet-button mcp-close" type="button" onClick={onClose}>Cerrar</button>
@@ -230,7 +232,7 @@ export function StudioShell({ active, children }: { active: ViewKey; children: R
             <input ref={searchRef} aria-label="Buscar en la biblioteca" placeholder="Buscar piezas, videos…" value={search} onChange={(event) => setSearch(event.target.value)} />
             <kbd>Ctrl K</kbd>
           </form>
-          <button className="topbar-action-button" type="button" onClick={() => setShowMcp(true)} aria-label="Conectar Hermes con Nex"><Icon><circle cx="8" cy="8" r="3" /><circle cx="16" cy="16" r="3" /><path d="m10 10 4 4M19 5h2v2M3 17v2h2" /></Icon><span>Conectar MCP</span></button>
+          <button className="topbar-action-button" type="button" onClick={() => setShowMcp(true)} aria-label="Conectar tu IA con Nex"><Icon><circle cx="8" cy="8" r="3" /><circle cx="16" cy="16" r="3" /><path d="m10 10 4 4M19 5h2v2M3 17v2h2" /></Icon><span>Conectar MCP</span></button>
           <button className="icon-button theme-toggle" type="button" onClick={changeTheme} aria-label={`Cambiar a modo ${theme === "dark" ? "claro" : "oscuro"}`} title={`Modo ${theme === "dark" ? "claro" : "oscuro"}`}>
             {theme === "dark" ? <Icon><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" /></Icon> : <Icon><path d="M20.5 15.5A8.5 8.5 0 0 1 8.5 3.5 8.5 8.5 0 1 0 20.5 15.5Z" /></Icon>}
           </button>

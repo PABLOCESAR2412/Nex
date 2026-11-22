@@ -53,6 +53,8 @@ El Worker existente se llama `nex` y está conectado al repositorio `PABLOCESAR2
 - **Deploy command:** `bun run deploy`
 - **Root directory:** `/`
 
+`bun run deploy` aplica primero las migraciones de D1 (son aditivas, así que el código anterior sigue funcionando con ellas) y después publica el Worker, para que el cron nunca corra código nuevo contra una base sin actualizar.
+
 El comando de build es necesario para que TanStack Start y Vite generen el Worker y los assets. Si queda vacío, `wrangler deploy` no tendrá una compilación válida que publicar. La conexión y el token de Workers Builds siguen gestionándose desde Cloudflare; no se guardan secretos en este repositorio.
 
 ## Visión del producto

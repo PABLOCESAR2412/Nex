@@ -398,7 +398,8 @@ const ACCOUNT_NOTICES: Record<string, Record<string, string>> = {
 
 export function AccountsPage() {
   const [accounts, setAccounts] = useState<SocialAccountSummary[]>([]);
-  const [configured, setConfigured] = useState({ instagram: false, tiktok: false });
+  // null = todavía no se sabe: no se muestran avisos de configuración (ni se usa window) mientras carga ni al renderizar en el servidor.
+  const [configured, setConfigured] = useState<{ instagram: boolean; tiktok: boolean } | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const instagramAccounts = accounts.filter((account) => account.platform === "Instagram");
@@ -455,7 +456,7 @@ export function AccountsPage() {
     }
   }
 
-  const connectButton = (platform: "instagram" | "tiktok", label: string, existing: number) => configured[platform]
+  const connectButton = (platform: "instagram" | "tiktok", label: string, existing: number) => configured?.[platform]
     ? <a className="primary-button" href={"/api/social/" + platform + "/connect"}><Icon><path d="M12 5v14M5 12h14" /></Icon><span>{existing ? "Añadir cuenta" : "Conectar " + label}</span></a>
     : <button className="primary-button" type="button" disabled><Icon><path d="M12 5v14M5 12h14" /></Icon><span>Conectar {label}</span></button>;
   const allAccounts = [...instagramAccounts, ...tiktokAccounts];
@@ -465,9 +466,9 @@ export function AccountsPage() {
     {notice && <p className="content-feedback" role="status">{notice}</p>}
     {accountError && <p className="content-feedback" role="alert">{accountError}</p>}
     <section className="account-overview"><span className="overview-icon"><SocialIcon platform="Instagram" /></span><div><strong>Instagram</strong><p>Puedes conectar varias cuentas profesionales, una por una.</p></div>{connectButton("instagram", "Instagram", instagramAccounts.length)}</section>
-    {!configured.instagram && <div className="social-config-note"><strong>Falta configurar la aplicación de Meta</strong><p>En los secretos del Worker añade <code>INSTAGRAM_APP_ID</code>, <code>INSTAGRAM_APP_SECRET</code> y <code>INSTAGRAM_TOKEN_ENCRYPTION_KEY</code> (o <code>TOKEN_ENCRYPTION_KEY</code>). La versión Graph usa <code>v27.0</code> si no defines una propia; <code>PUBLIC_APP_URL</code> es opcional salvo para publicar de forma programada.</p><p>Agrega esta URI exacta en el inicio de sesión de Instagram dentro de Meta: <code>{window.location.origin}/api/social/instagram/callback</code>.</p><p>En modo desarrollo, añade cada cuenta como tester de Instagram y acepta la invitación. Solo se admiten cuentas profesionales.</p></div>}
+    {configured && !configured.instagram && <div className="social-config-note"><strong>Falta configurar la aplicación de Meta</strong><p>En los secretos del Worker añade <code>INSTAGRAM_APP_ID</code>, <code>INSTAGRAM_APP_SECRET</code> y <code>INSTAGRAM_TOKEN_ENCRYPTION_KEY</code> (o <code>TOKEN_ENCRYPTION_KEY</code>). La versión Graph usa <code>v27.0</code> si no defines una propia; <code>PUBLIC_APP_URL</code> es opcional salvo para publicar de forma programada.</p><p>Agrega esta URI exacta en el inicio de sesión de Instagram dentro de Meta: <code>{window.location.origin}/api/social/instagram/callback</code>.</p><p>En modo desarrollo, añade cada cuenta como tester de Instagram y acepta la invitación. Solo se admiten cuentas profesionales.</p></div>}
     <section className="account-overview"><span className="overview-icon"><SocialIcon platform="TikTok" /></span><div><strong>TikTok</strong><p>Nex sube el video a tu bandeja de TikTok como borrador. Lo revisas y lo publicas tú desde la app.</p></div>{connectButton("tiktok", "TikTok", tiktokAccounts.length)}</section>
-    {!configured.tiktok && <div className="social-config-note"><strong>Falta configurar la aplicación de TikTok</strong><p>En los secretos del Worker añade <code>TIKTOK_CLIENT_KEY</code>, <code>TIKTOK_CLIENT_SECRET</code>, <code>TOKEN_ENCRYPTION_KEY</code> (o <code>INSTAGRAM_TOKEN_ENCRYPTION_KEY</code>) y <code>PUBLIC_APP_URL</code> con el origen público HTTPS de Nex.</p><p>En TikTok for Developers activa Login Kit y Content Posting API con el permiso <code>video.upload</code>, y registra esta URI de redirección exacta: <code>{(window.location.origin)}/api/social/tiktok/callback</code>.</p><p>Si la app está en modo sandbox, añade tu cuenta de TikTok como usuario de prueba.</p></div>}
+    {configured && !configured.tiktok && <div className="social-config-note"><strong>Falta configurar la aplicación de TikTok</strong><p>En los secretos del Worker añade <code>TIKTOK_CLIENT_KEY</code>, <code>TIKTOK_CLIENT_SECRET</code>, <code>TOKEN_ENCRYPTION_KEY</code> (o <code>INSTAGRAM_TOKEN_ENCRYPTION_KEY</code>) y <code>PUBLIC_APP_URL</code> con el origen público HTTPS de Nex.</p><p>En TikTok for Developers activa Login Kit y Content Posting API con el permiso <code>video.upload</code>, y registra esta URI de redirección exacta: <code>{(window.location.origin)}/api/social/tiktok/callback</code>.</p><p>Si la app está en modo sandbox, añade tu cuenta de TikTok como usuario de prueba.</p></div>}
     <PageSection title="Cuentas conectadas" detail="Cada autorización se guarda de forma independiente en tu estudio.">
       {allAccounts.length === 0 ? <p className="content-empty">Aún no hay cuentas conectadas.</p> : <ul className="account-list">
         {allAccounts.map((account) => <li className="account-row" key={account.id}><div className={"account-social account-social-" + account.platform.toLowerCase()}><SocialIcon platform={account.platform} /></div><div className="account-identity"><strong>{account.handle}</strong><span>{account.platform === "TikTok" ? "TikTok · Borradores en la bandeja" : "Instagram · Cuenta profesional"}</span></div><div className="account-purpose">{account.platform === "TikTok" ? "Videos como borrador" : "Publicaciones y Reels"}</div><span className={`account-status${account.status !== "conectada" ? " account-status-muted" : ""}`}><i />{account.status === "conectada" ? "Conectada" : "Desconectada"}</span></li>)}
