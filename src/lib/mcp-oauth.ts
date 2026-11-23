@@ -135,7 +135,7 @@ function htmlEscape(value: string) {
   })[character] ?? character);
 }
 
-function consentPage(input: { requestId: string; clientName: string; email: string; scopes: McpOAuthScope[] }) {
+function consentPage(input: { requestId: string; clientName: string; email: string; origin: string; scopes: McpOAuthScope[] }) {
   const labels: Record<McpOAuthScope, string> = {
     "nex:read": "Consultar piezas, calendario y cuentas conectadas",
     "nex:write": "Crear borradores, cargar archivos y programar contenido",
@@ -146,12 +146,14 @@ function consentPage(input: { requestId: string; clientName: string; email: stri
   const clientName = htmlEscape(input.clientName);
   const email = htmlEscape(input.email);
   const requestId = htmlEscape(input.requestId);
+  const origin = new URL(input.origin).origin;
+  const action = htmlEscape(new URL("/oauth/authorize", origin).toString());
   const scriptNonce = randomSecret();
-  const html = `<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Autorizar asistente · Nex</title><style>body{margin:0;background:#101812;color:#eef2e9;font:16px/1.5 system-ui,sans-serif}.wrap{max-width:520px;margin:9vh auto;padding:28px}main{border:1px solid #344239;border-radius:16px;padding:28px;background:#18221b}h1{font-size:25px;line-height:1.2}p,li{color:#c2cdbf}ul{padding-left:22px}button{padding:12px 16px;border:0;border-radius:9px;font:inherit;cursor:pointer}.allow{background:#b8d7a5;color:#162016}.deny{background:transparent;color:#d4aaa0;border:1px solid #68514d;margin-left:8px}button:disabled{opacity:.7;cursor:wait}.account{font-size:13px}.status{min-height:1.5em;margin-bottom:0}</style><div class="wrap"><main><h1>Conectar ${clientName} con Nex</h1><p>${clientName} solicita acceso a tu estudio Nex.</p><ul>${permissions}</ul><p class="account">Cuenta: ${email}</p><form id="oauth-consent-form" method="post" action="/oauth/authorize"><input type="hidden" name="request_id" value="${requestId}"><input type="hidden" id="oauth-decision" value=""><button class="allow" type="submit" name="decision" value="allow" data-decision="allow">Autorizar conexión</button><button class="deny" type="submit" name="decision" value="deny" data-decision="deny">Cancelar</button><p class="status" id="oauth-submit-status" role="status" aria-live="polite"></p></form></main></div><script nonce="${scriptNonce}">(()=>{const form=document.getElementById("oauth-consent-form");let submitted=false;form.addEventListener("submit",event=>{if(submitted){event.preventDefault();return}const submitter=event.submitter;const decision=submitter?.getAttribute("data-decision");if(decision!=="allow"&&decision!=="deny"){event.preventDefault();return}submitted=true;const decisionField=document.getElementById("oauth-decision");decisionField.name="decision";decisionField.value=decision;form.querySelectorAll("button").forEach(button=>button.disabled=true);document.getElementById("oauth-submit-status").textContent=decision==="allow"?"Conectando con Nex…":"Cancelando…";submitter.textContent=decision==="allow"?"Conectando…":"Cancelando…"})})()</script></html>`;
+  const html = `<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Autorizar asistente · Nex</title><style>body{margin:0;background:#101812;color:#eef2e9;font:16px/1.5 system-ui,sans-serif}.wrap{max-width:520px;margin:9vh auto;padding:28px}main{border:1px solid #344239;border-radius:16px;padding:28px;background:#18221b}h1{font-size:25px;line-height:1.2}p,li{color:#c2cdbf}ul{padding-left:22px}button{padding:12px 16px;border:0;border-radius:9px;font:inherit;cursor:pointer}.allow{background:#b8d7a5;color:#162016}.deny{background:transparent;color:#d4aaa0;border:1px solid #68514d;margin-left:8px}button:disabled{opacity:.7;cursor:wait}.account{font-size:13px}.status{min-height:1.5em;margin-bottom:0}</style><div class="wrap"><main><h1>Conectar ${clientName} con Nex</h1><p>${clientName} solicita acceso a tu estudio Nex.</p><ul>${permissions}</ul><p class="account">Cuenta: ${email}</p><form id="oauth-consent-form" method="post" action="${action}"><input type="hidden" name="request_id" value="${requestId}"><input type="hidden" id="oauth-decision" value=""><button class="allow" type="submit" name="decision" value="allow" data-decision="allow">Autorizar conexión</button><button class="deny" type="submit" name="decision" value="deny" data-decision="deny">Cancelar</button><p class="status" id="oauth-submit-status" role="status" aria-live="polite"></p></form></main></div><script nonce="${scriptNonce}">(()=>{const form=document.getElementById("oauth-consent-form");let submitted=false;form.addEventListener("submit",event=>{if(submitted){event.preventDefault();return}const submitter=event.submitter;const decision=submitter?.getAttribute("data-decision");if(decision!=="allow"&&decision!=="deny"){event.preventDefault();return}submitted=true;const decisionField=document.getElementById("oauth-decision");decisionField.name="decision";decisionField.value=decision;form.querySelectorAll("button").forEach(button=>button.disabled=true);document.getElementById("oauth-submit-status").textContent=decision==="allow"?"Conectando con Nex…":"Cancelando…";submitter.textContent=decision==="allow"?"Conectando…":"Cancelando…"})})()</script></html>`;
   return new Response(html, {
     headers: noStoreHeaders({
       "content-type": "text/html; charset=utf-8",
-      "content-security-policy": `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${scriptNonce}'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`,
+      "content-security-policy": `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${scriptNonce}'; form-action 'self' ${origin}; base-uri 'none'; frame-ancestors 'none'`,
       "referrer-policy": "no-referrer",
     }),
   });
@@ -297,6 +299,7 @@ export async function beginOAuthAuthorization(request: Request) {
       requestId: pending.id,
       clientName: pending.client_name,
       email: account?.email ?? "Cuenta Nex autenticada",
+      origin: url.origin,
       scopes,
     });
   }
@@ -342,6 +345,7 @@ export async function beginOAuthAuthorization(request: Request) {
     requestId,
     clientName: clientRow.client_name,
     email: account?.email ?? "Cuenta Nex autenticada",
+    origin: url.origin,
     scopes: authorization.scope,
   });
 }
