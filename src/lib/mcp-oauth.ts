@@ -153,7 +153,9 @@ function consentPage(input: { requestId: string; clientName: string; email: stri
   return new Response(html, {
     headers: noStoreHeaders({
       "content-type": "text/html; charset=utf-8",
-      "content-security-policy": `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${scriptNonce}'; form-action 'self' ${origin}; base-uri 'none'; frame-ancestors 'none'`,
+      // Embedded OAuth browsers reject the consent POST even with this exact host listed.
+      // The fixed action stays same-origin; the server binds the POST to the session and one-use request.
+      "content-security-policy": `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${scriptNonce}'; base-uri 'none'; frame-ancestors 'none'`,
       "referrer-policy": "no-referrer",
     }),
   });

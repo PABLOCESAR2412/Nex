@@ -192,7 +192,7 @@ describe("MCP OAuth token client policy", () => {
     expect(body).toContain("button.disabled=true");
     expect(body).toContain('action="https://nex.example/oauth/authorize"');
     expect(response.headers.get("content-security-policy")).toContain("script-src 'nonce-");
-    expect(response.headers.get("content-security-policy")).toContain("form-action 'self' https://nex.example");
+    expect(response.headers.get("content-security-policy")).not.toContain("form-action");
   });
 
   it("shows a friendly restart path when a consent request was already consumed", async () => {
