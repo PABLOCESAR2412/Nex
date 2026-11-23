@@ -583,9 +583,10 @@ export async function resolveMcpAccessToken(token: string, origin: string): Prom
 }
 
 export async function listMcpOAuthGrants(userId: string) {
+  const now = new Date().toISOString();
   const { results } = await getDb().prepare(
-    "SELECT id, client_name, scopes, created_at, last_used_at FROM mcp_oauth_grants WHERE user_id = ? AND revoked_at IS NULL ORDER BY created_at DESC",
-  ).bind(userId).all<{
+    "SELECT id, client_name, scopes, created_at, last_used_at FROM mcp_oauth_grants WHERE user_id = ? AND revoked_at IS NULL AND (access_expires_at > ? OR refresh_expires_at > ?) ORDER BY created_at DESC",
+  ).bind(userId, now, now).all<{
     id: string;
     client_name: string;
     scopes: string;

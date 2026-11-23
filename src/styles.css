@@ -596,24 +596,46 @@ h1 { margin-bottom: 9px; color: var(--ivory); font: 500 clamp(35px, 4.1vw, 55px)
 .mcp-dialog { width: min(620px, 100%); max-height: min(85vh, 760px); overflow-y: auto; padding: 23px; border: 1px solid var(--line-strong); border-radius: 15px; background: var(--pine-850); box-shadow: 0 18px 55px rgb(0 0 0 / 32%); }
 .mcp-dialog-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 17px; margin-bottom: 19px; }
 .mcp-dialog-heading h2 { margin-bottom: 7px; color: var(--ivory); font: 500 27px/1.1 Georgia, serif; }
-.mcp-dialog-heading p, .mcp-new-key p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
-.mcp-existing-keys { display: grid; gap: 14px; }
+.mcp-dialog-heading p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.mcp-active-connections, .mcp-connect-section, .mcp-legacy-connections { display: grid; gap: 12px; }
+.mcp-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.mcp-section-heading h3, .mcp-connect-section > h3, .mcp-legacy-connections h3 { margin: 0; color: var(--text); font: 500 16px/1.25 Georgia, serif; }
+.mcp-section-heading p, .mcp-connect-section > p, .mcp-legacy-connections > p { margin: 4px 0 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.mcp-active-count { min-width: 27px; display: grid; place-items: center; padding: 4px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--sage-300); font-size: 10px; font-variant-numeric: tabular-nums; }
+.mcp-empty-state { margin: 0; padding: 12px 0; border-bottom: 1px solid var(--line); color: var(--muted); font-size: 11px; line-height: 1.6; }
+.mcp-connection-row { min-width: 0; display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.mcp-client-mark { width: 32px; height: 32px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 9px; background: var(--pine-700); color: var(--sage-300); font: 500 14px Georgia, serif; }
+.mcp-connection-info { min-width: 0; display: grid; gap: 4px; }
+.mcp-connection-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.mcp-connection-title strong { color: var(--text); font-size: 11px; }
+.mcp-connection-info small { color: var(--muted); font-size: 9px; line-height: 1.5; overflow-wrap: anywhere; }
+.mcp-active-status { display: inline-flex; align-items: center; gap: 5px; color: var(--sage-300); font-size: 9px; }
+.mcp-active-status::before { width: 6px; height: 6px; border-radius: 50%; background: var(--sage-400); content: ""; }
 .mcp-key-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .mcp-key-row > div { min-width: 0; display: grid; gap: 5px; }
-.mcp-key-row strong, .mcp-connect-notes strong, .mcp-new-key > strong { color: var(--text); font-size: 11px; }
+.mcp-key-row strong { color: var(--text); font-size: 11px; }
 .mcp-key-row small { color: var(--muted); font-size: 9px; }
 .mcp-key-row .quiet-button { color: #d6aaa2; font-size: 10px; }
-.mcp-connect-notes { padding: 13px 0 0; }
-.mcp-connect-notes p { max-width: 58ch; margin: 5px 0 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
-.mcp-client-guide { display: grid; gap: 8px; padding: 15px 0 2px; border-top: 1px solid var(--line); }
-.mcp-client-guide h3 { margin: 0; color: var(--text); font-size: 13px; font-weight: 600; }
-.mcp-client-guide p { max-width: 62ch; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
-.mcp-endpoint-copy { display: flex; align-items: center; gap: 9px; }
-.mcp-endpoint-copy code { min-width: 0; flex: 1; overflow-wrap: anywhere; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--pine-950); color: var(--text); font: 10px/1.5 Consolas, monospace; }
-.mcp-plan-note { font-size: 10px !important; }
-.mcp-existing-keys > .primary-button, .mcp-new-key .primary-button { width: fit-content; min-height: 39px; padding: 0 15px; font-size: 10px; }
-.mcp-new-key { display: grid; gap: 9px; }
-.mcp-new-key pre { max-height: 230px; overflow: auto; margin: 3px 0; padding: 13px; border: 1px solid var(--line); border-radius: 9px; background: var(--pine-950); color: var(--text); font: 10px/1.6 Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.mcp-connect-section { margin-top: 4px; padding-top: 16px; border-top: 1px solid var(--line); }
+.mcp-client-label { margin-top: 2px; color: var(--muted); font-size: 10px; }
+.mcp-client-select { width: 100%; min-height: 40px; padding: 0 11px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--pine-950); color: var(--text); font-family: inherit; font-size: 11px; line-height: 1.4; }
+.mcp-client-select:focus-visible { outline: 2px solid var(--sage-400); outline-offset: 2px; }
+.mcp-client-select option { background: var(--pine-950); color: var(--text); }
+.mcp-client-guide { display: grid; gap: 10px; padding: 13px 0 2px; }
+.mcp-guide-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.mcp-guide-heading h4 { margin: 0; color: var(--text); font-size: 12px; font-weight: 650; }
+.mcp-guide-heading span { padding: 3px 7px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 9px; }
+.mcp-client-guide > p { max-width: 62ch; margin: 0; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.mcp-connection-method { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 20px; margin: 0; }
+.mcp-connection-method div { display: grid; gap: 3px; }
+.mcp-connection-method dt { color: var(--muted); font-size: 9px; }
+.mcp-connection-method dd { margin: 0; color: var(--text); font-size: 10px; }
+.mcp-hermes-actions { margin: 0; }
+.mcp-endpoint-copy { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 9px; }
+.mcp-endpoint-copy > span { color: var(--muted); font-size: 9px; }
+.mcp-endpoint-copy code { min-width: 0; overflow-wrap: anywhere; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--pine-950); color: var(--text); font: 10px/1.5 Consolas, monospace; }
+.mcp-connection-note { font-size: 9px !important; }
+.mcp-hermes-actions .primary-button { width: fit-content; min-height: 39px; padding: 0 15px; font-size: 10px; }
 .mcp-close { display: block; margin: 17px 0 0 auto; font-size: 10px; }
 .auth-check { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--pine-950); color: var(--muted); font-size: 12px; }
 
@@ -627,6 +649,8 @@ h1 { margin-bottom: 9px; color: var(--ivory); font: 500 clamp(35px, 4.1vw, 55px)
   .settings-layout { grid-template-columns: minmax(0, 1fr) minmax(210px, .75fr); gap: 25px; }
   .account-row { grid-template-columns: 40px minmax(130px, 1fr) minmax(130px, auto) 32px; }
   .account-purpose { display: none; }
+  .mcp-connection-row { grid-template-columns: 34px minmax(0, 1fr); }
+  .mcp-connection-row > .quiet-button { grid-column: 2; justify-self: start; }
 }
 
 @media (max-width: 640px) {
@@ -721,7 +745,8 @@ h1 { margin-bottom: 9px; color: var(--ivory); font: 500 clamp(35px, 4.1vw, 55px)
   .month-day { min-height: 83px; padding: 6px; }
   .month-event { font-size: 8px; }
   .mcp-dialog { padding: 18px; }
-  .mcp-endpoint-copy { align-items: stretch; flex-direction: column; }
+  .mcp-endpoint-copy { grid-template-columns: minmax(0, 1fr) auto; align-items: stretch; }
+  .mcp-endpoint-copy > span { grid-column: 1 / -1; }
 }
 
 :root[data-theme="light"] {
@@ -776,7 +801,6 @@ h1 { margin-bottom: 9px; color: var(--ivory); font: 500 clamp(35px, 4.1vw, 55px)
 :root[data-theme="light"] .stage-current .stage-indicator { box-shadow: 0 0 0 2px #dceadd; }
 :root[data-theme="light"] .social-config-note,
 :root[data-theme="light"] .mcp-dialog { background: #fff; }
-:root[data-theme="light"] .mcp-new-key pre { background: #f2f6f1; }
 :root[data-theme="light"] .mcp-endpoint-copy code { background: #f2f6f1; }
 :root[data-theme="light"] .dialog-backdrop { background: rgb(19 43 27 / 42%); }
 :root[data-theme="light"] .account-status-muted { color: var(--muted); }

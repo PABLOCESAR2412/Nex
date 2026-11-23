@@ -9,6 +9,25 @@ import { useStudioSession } from "./studio-session";
 
 type ViewKey = "inicio" | "calendario" | "biblioteca" | "cuentas" | "despliegues" | "ajustes";
 type Theme = "dark" | "light";
+type McpClientKey = "hermes" | "chatgpt" | "claude" | "claude-code" | "opencode" | "custom";
+
+const mcpClients: Array<{ key: McpClientKey; label: string }> = [
+  { key: "hermes", label: "Hermes" },
+  { key: "chatgpt", label: "ChatGPT" },
+  { key: "claude", label: "Claude" },
+  { key: "claude-code", label: "Claude Code" },
+  { key: "opencode", label: "OpenCode" },
+  { key: "custom", label: "Personalizada" },
+];
+
+const mcpClientGuides: Record<McpClientKey, string> = {
+  hermes: "Usa “Añadir Nex a Hermes” para importar el servidor y autorízalo en el navegador.",
+  chatgpt: "En ChatGPT, añade la URL como servidor MCP personalizado desde Apps o Conectores y completa OAuth.",
+  claude: "En Claude, agrega Nex en Conectores personalizados con su URL y autoriza el acceso.",
+  "claude-code": "Añade Nex como servidor HTTP remoto en Claude Code y completa la autorización del navegador.",
+  opencode: "Añade la URL como servidor remoto en OpenCode y autentica con /mcps o `opencode mcp auth`.",
+  custom: "Configúralo en cualquier cliente que admita servidores MCP remotos por Streamable HTTP y OAuth 2.1 con PKCE.",
+};
 
 const navigation: Array<{ key: ViewKey; label: string; href: string; icon: ReactNode }> = [
   { key: "inicio", label: "Inicio", href: "/", icon: <path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z" /> },
@@ -33,6 +52,7 @@ function McpConnectionDialog({ onClose }: { onClose: () => void }) {
   const dialogRef = useRef<HTMLElement>(null);
   const [tokens, setTokens] = useState<McpTokenSummary[]>([]);
   const [oauthGrants, setOAuthGrants] = useState<McpOAuthGrantSummary[]>([]);
+  const [selectedClient, setSelectedClient] = useState<McpClientKey | "">("");
   const [installLink, setInstallLink] = useState("");
   const [mcpUrl, setMcpUrl] = useState("");
   const [loading, setLoading] = useState(true);
@@ -66,7 +86,7 @@ function McpConnectionDialog({ onClose }: { onClose: () => void }) {
       setMcpUrl(endpoint);
       setInstallLink(createHermesInstallLink(endpoint));
     } catch {
-      setError("No se pudo preparar el enlace seguro para Hermes.");
+      setError("No se pudo preparar la conexión segura.");
     }
   }, []);
 
@@ -97,7 +117,7 @@ function McpConnectionDialog({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   async function revoke(token: McpTokenSummary) {
-    if (!window.confirm(`¿Revocar la conexión “${token.label}”? Hermes dejará de tener acceso.`)) return;
+    if (!window.confirm(`¿Revocar la conexión “${token.label}”? Dejará de tener acceso a Nex.`)) return;
     setBusy(true);
     setError(null);
     try {
@@ -130,7 +150,7 @@ function McpConnectionDialog({ onClose }: { onClose: () => void }) {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
-      setError("No se pudo copiar el enlace. Usa el botón para abrir Hermes.");
+      setError("No se pudo copiar el enlace de instalación.");
     }
   }
 
@@ -144,30 +164,68 @@ function McpConnectionDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const selected = mcpClients.find((client) => client.key === selectedClient);
+
   return <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <section ref={dialogRef} className="mcp-dialog" role="dialog" aria-modal="true" aria-labelledby="mcp-dialog-title">
-      <div className="mcp-dialog-heading"><div><h2 id="mcp-dialog-title">Conectar asistentes con Nex</h2><p>Conecta Hermes o cualquier cliente compatible con MCP y autoriza cada cuenta Nex con OAuth.</p></div><button className="icon-button" type="button" onClick={onClose} aria-label="Cerrar"><Icon><path d="m6 6 12 12M18 6 6 18" /></Icon></button></div>
-      {error && <p className="content-feedback" role="alert">{error}</p>}
-      <div className="mcp-existing-keys">
-        <div className="mcp-connect-notes"><strong>Autorización OAuth</strong><p>Cada asistente se registra con PKCE. Nex muestra los permisos solicitados y almacena solo hashes de los tokens; no tienes que copiar claves privadas.</p></div>
-        <div className="content-row-actions">
-          <a className={`primary-button${installLink ? "" : " disabled"}`} href={installLink || undefined} aria-disabled={!installLink}>Añadir Nex a Hermes</a>
-          <button className="quiet-button" type="button" onClick={() => void copyInstallLink()} disabled={!installLink}>{copied ? "Enlace copiado" : "Copiar enlace de Hermes"}</button>
-        </div>
-        <section className="mcp-client-guide" aria-labelledby="mcp-chatgpt-title">
-          <h3 id="mcp-chatgpt-title">ChatGPT</h3>
-          <p>En ChatGPT web, abre Ajustes → Apps o Plugins → Añadir servidor MCP personalizado. Pega esta dirección, selecciona OAuth y después inicia sesión en Nex y acepta los permisos.</p>
-          <div className="mcp-endpoint-copy"><code>{mcpUrl || "Preparando dirección segura…"}</code><button className="quiet-button" type="button" onClick={() => void copyMcpUrl()} disabled={!mcpUrl}>{endpointCopied ? "Copiada" : "Copiar dirección"}</button></div>
-          <p className="mcp-plan-note">ChatGPT requiere Business, Enterprise o Edu para usar acciones de escritura; Pro permite conectar solo herramientas de lectura.</p>
-        </section>
-        {loading ? <SkeletonRows count={2} label="Cargando autorizaciones" variant="compact" /> : <>
-          <section className="mcp-existing-keys" aria-labelledby="mcp-oauth-connections-title">
-            <h3 id="mcp-oauth-connections-title">Autorizaciones activas</h3>
-            {oauthGrants.length === 0 ? <p>Una sesión aparece aquí después de que Hermes o ChatGPT inicie sesión en Nex y aceptes los permisos. Luego puedes revisar el acceso o revocarlo.</p> : oauthGrants.map((grant) => <div className="mcp-key-row" key={grant.id}><div><strong>{grant.client_name}</strong><small>Permisos: {formatMcpScopes(grant.scopes)} · Creada {new Date(grant.created_at.replace(" ", "T") + (grant.created_at.endsWith("Z") ? "" : "Z")).toLocaleDateString("es-EC")} · {grant.last_used_at ? `Último uso ${new Date(grant.last_used_at.replace(" ", "T") + (grant.last_used_at.endsWith("Z") ? "" : "Z")).toLocaleString("es-EC")}` : "Sin uso registrado todavía"}</small></div><button className="quiet-button" type="button" disabled={busy} onClick={() => void revokeOAuthGrant(grant)}>Revocar</button></div>)}
-          </section>
-          {tokens.length > 0 && <section className="mcp-existing-keys" aria-labelledby="mcp-legacy-connections-title"><h3 id="mcp-legacy-connections-title">Claves Bearer antiguas (no OAuth)</h3><p>Son claves fijas del método anterior, separadas de tus cuentas de Instagram. Mientras aparezcan aquí, siguen activas; pulsa Revocar para deshabilitarlas. “Sin uso registrado” significa que Nex no recibió llamadas con esa clave.</p>{tokens.map((token) => <div className="mcp-key-row" key={token.id}><div><strong>{token.label}</strong><small>Creada {new Date(token.created_at.replace(" ", "T") + (token.created_at.endsWith("Z") ? "" : "Z")).toLocaleDateString("es-EC")} · {token.last_used_at ? `Último uso ${new Date(token.last_used_at.replace(" ", "T") + (token.last_used_at.endsWith("Z") ? "" : "Z")).toLocaleString("es-EC")}` : "Sin uso registrado"}</small></div><button className="quiet-button" type="button" disabled={busy} onClick={() => void revoke(token)}>Revocar</button></div>)}</section>}
-        </>}
+      <div className="mcp-dialog-heading">
+        <div><h2 id="mcp-dialog-title">Conexiones MCP</h2><p>Revisa los agentes autorizados o prepara una conexión nueva.</p></div>
+        <button className="icon-button" type="button" onClick={onClose} aria-label="Cerrar"><Icon><path d="m6 6 12 12M18 6 6 18" /></Icon></button>
       </div>
+      {error && <p className="content-feedback" role="alert">{error}</p>}
+
+      <section className="mcp-active-connections" aria-labelledby="mcp-active-title">
+        <div className="mcp-section-heading">
+          <div><h3 id="mcp-active-title">Conexiones activas</h3><p>Sesiones OAuth con acceso vigente a Nex.</p></div>
+          <span className="mcp-active-count" aria-label={loading ? "Cargando conexiones activas" : `${oauthGrants.length} conexiones activas`}>{loading ? "…" : oauthGrants.length}</span>
+        </div>
+        {loading ? <SkeletonRows count={2} label="Cargando conexiones activas" variant="compact" /> : oauthGrants.length === 0 ?
+          <p className="mcp-empty-state">Todavía no hay agentes autorizados. Cuando completes la conexión, aparecerá aquí con sus permisos y podrás revocarla.</p> :
+          oauthGrants.map((grant) => <div className="mcp-connection-row" key={grant.id}>
+            <span className="mcp-client-mark" aria-hidden="true">{grant.client_name.trim().charAt(0).toUpperCase() || "M"}</span>
+            <div className="mcp-connection-info">
+              <div className="mcp-connection-title"><strong>{grant.client_name}</strong><span className="mcp-active-status">Activa</span></div>
+              <small>Permisos: {formatMcpScopes(grant.scopes)}</small>
+              <small>Autorizada {new Date(grant.created_at.replace(" ", "T") + (grant.created_at.endsWith("Z") ? "" : "Z")).toLocaleDateString("es-EC")} · {grant.last_used_at ? `Último uso ${new Date(grant.last_used_at.replace(" ", "T") + (grant.last_used_at.endsWith("Z") ? "" : "Z")).toLocaleString("es-EC")}` : "Aún no utilizada"}</small>
+            </div>
+            <button className="quiet-button" type="button" disabled={busy} onClick={() => void revokeOAuthGrant(grant)}>Revocar</button>
+          </div>)}
+      </section>
+
+      {tokens.length > 0 && <section className="mcp-legacy-connections" aria-labelledby="mcp-legacy-connections-title">
+        <h3 id="mcp-legacy-connections-title">Claves antiguas</h3>
+        <p>Estas claves usan el método anterior a OAuth. Revócalas si ya no las utiliza ningún cliente.</p>
+        {tokens.map((token) => <div className="mcp-key-row" key={token.id}>
+          <div><strong>{token.label}</strong><small>Creada {new Date(token.created_at.replace(" ", "T") + (token.created_at.endsWith("Z") ? "" : "Z")).toLocaleDateString("es-EC")} · {token.last_used_at ? `Último uso ${new Date(token.last_used_at.replace(" ", "T") + (token.last_used_at.endsWith("Z") ? "" : "Z")).toLocaleString("es-EC")}` : "Sin uso registrado"}</small></div>
+          <button className="quiet-button" type="button" disabled={busy} onClick={() => void revoke(token)}>Revocar</button>
+        </div>)}
+      </section>}
+
+      <section className="mcp-connect-section" aria-labelledby="mcp-connect-title">
+        <h3 id="mcp-connect-title">Conectar un agente</h3>
+        <p>Elige el agente o cliente MCP para ver cómo conectarlo.</p>
+        <label className="mcp-client-label" htmlFor="mcp-client-select">Cliente o harness</label>
+        <select id="mcp-client-select" className="mcp-client-select" value={selectedClient} onChange={(event) => setSelectedClient(event.target.value as McpClientKey | "")}>
+          <option value="">Selecciona un agente…</option>
+          {mcpClients.map((client) => <option key={client.key} value={client.key}>{client.label}</option>)}
+        </select>
+
+        {selected && <div className="mcp-client-guide" aria-live="polite">
+          <div className="mcp-guide-heading"><h4>{selected.label}</h4><span>Servidor MCP remoto</span></div>
+          <p>{mcpClientGuides[selected.key]}</p>
+          <dl className="mcp-connection-method">
+            <div><dt>Transporte</dt><dd>Streamable HTTP</dd></div>
+            <div><dt>Autenticación</dt><dd>OAuth 2.1 · PKCE</dd></div>
+          </dl>
+          {selected.key === "hermes" && <div className="content-row-actions mcp-hermes-actions">
+            <a className={`primary-button${installLink ? "" : " disabled"}`} href={installLink || undefined} aria-disabled={!installLink}>Añadir Nex a Hermes</a>
+            <button className="quiet-button" type="button" onClick={() => void copyInstallLink()} disabled={!installLink}>{copied ? "Enlace copiado" : "Copiar enlace de instalación"}</button>
+          </div>}
+          <div className="mcp-endpoint-copy"><span>URL de Nex</span><code>{mcpUrl || "Preparando dirección segura…"}</code><button className="quiet-button" type="button" onClick={() => void copyMcpUrl()} disabled={!mcpUrl}>{endpointCopied ? "Copiada" : "Copiar URL"}</button></div>
+          <p className="mcp-connection-note">Al terminar OAuth, la sesión autorizada aparecerá en Conexiones activas. Nex no muestra ni guarda claves privadas en esta pantalla.</p>
+        </div>}
+      </section>
+
       <button className="quiet-button mcp-close" type="button" onClick={onClose}>Cerrar</button>
     </section>
   </div>;
@@ -259,7 +317,7 @@ export function StudioShell({ active, children }: { active: ViewKey; children: R
             <input ref={searchRef} aria-label="Buscar en la biblioteca" placeholder="Buscar piezas, videos…" value={search} onChange={(event) => setSearch(event.target.value)} />
             <kbd>Ctrl K</kbd>
           </form>
-          <button className="topbar-action-button" type="button" onClick={() => setShowMcp(true)} aria-label="Conectar Hermes con Nex"><Icon><circle cx="8" cy="8" r="3" /><circle cx="16" cy="16" r="3" /><path d="m10 10 4 4M19 5h2v2M3 17v2h2" /></Icon><span>Conectar MCP</span></button>
+          <button className="topbar-action-button" type="button" onClick={() => setShowMcp(true)} aria-label="Administrar conexiones MCP"><Icon><circle cx="8" cy="8" r="3" /><circle cx="16" cy="16" r="3" /><path d="m10 10 4 4M19 5h2v2M3 17v2h2" /></Icon><span>Conectar MCP</span></button>
           <button className="icon-button theme-toggle" type="button" onClick={changeTheme} aria-label={`Cambiar a modo ${theme === "dark" ? "claro" : "oscuro"}`} title={`Modo ${theme === "dark" ? "claro" : "oscuro"}`}>
             {theme === "dark" ? <Icon><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42" /></Icon> : <Icon><path d="M20.5 15.5A8.5 8.5 0 0 1 8.5 3.5 8.5 8.5 0 1 0 20.5 15.5Z" /></Icon>}
           </button>
