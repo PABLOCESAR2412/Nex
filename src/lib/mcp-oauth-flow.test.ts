@@ -188,6 +188,25 @@ describe("MCP OAuth token client policy", () => {
     expect(body).toContain("Conectar Hermes Agent con Nex");
     expect(body).toContain("pablocesar.t.g@gmail.com");
     expect(body).toContain(requestId);
+    expect(body).toContain("Conectando con Nex…");
+    expect(body).toContain("button.disabled=true");
+    expect(response.headers.get("content-security-policy")).toContain("script-src 'nonce-");
+  });
+
+  it("shows a friendly restart path when a consent request was already consumed", async () => {
+    fakeDb.session = { id: "session-test-id", userId: "user-test-id" };
+
+    const response = await completeOAuthAuthorization(new Request("https://nex.example/oauth/authorize", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ request_id: "used-request-1234567890", decision: "allow" }),
+    }));
+    const body = await response.text();
+
+    expect(response.status).toBe(409);
+    expect(response.headers.get("content-type")).toContain("text/html");
+    expect(body).toContain("Esta solicitud ya se procesó");
+    expect(body).toContain("Vuelve a Hermes y empieza una conexión nueva con Nex.");
   });
 
   it("rate-limits public client registration before any D1 write", async () => {

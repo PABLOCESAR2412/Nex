@@ -146,8 +146,21 @@ function consentPage(input: { requestId: string; clientName: string; email: stri
   const clientName = htmlEscape(input.clientName);
   const email = htmlEscape(input.email);
   const requestId = htmlEscape(input.requestId);
-  const html = `<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Autorizar asistente · Nex</title><style>body{margin:0;background:#101812;color:#eef2e9;font:16px/1.5 system-ui,sans-serif}.wrap{max-width:520px;margin:9vh auto;padding:28px}main{border:1px solid #344239;border-radius:16px;padding:28px;background:#18221b}h1{font-size:25px;line-height:1.2}p,li{color:#c2cdbf}ul{padding-left:22px}button{padding:12px 16px;border:0;border-radius:9px;font:inherit;cursor:pointer}.allow{background:#b8d7a5;color:#162016}.deny{background:transparent;color:#d4aaa0;border:1px solid #68514d;margin-left:8px}.account{font-size:13px}</style><div class="wrap"><main><h1>Conectar ${clientName} con Nex</h1><p>${clientName} solicita acceso a tu estudio Nex.</p><ul>${permissions}</ul><p class="account">Cuenta: ${email}</p><form method="post" action="/oauth/authorize"><input type="hidden" name="request_id" value="${requestId}"><button class="allow" type="submit" name="decision" value="allow">Autorizar conexión</button><button class="deny" type="submit" name="decision" value="deny">Cancelar</button></form></main></div></html>`;
+  const scriptNonce = randomSecret();
+  const html = `<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Autorizar asistente · Nex</title><style>body{margin:0;background:#101812;color:#eef2e9;font:16px/1.5 system-ui,sans-serif}.wrap{max-width:520px;margin:9vh auto;padding:28px}main{border:1px solid #344239;border-radius:16px;padding:28px;background:#18221b}h1{font-size:25px;line-height:1.2}p,li{color:#c2cdbf}ul{padding-left:22px}button{padding:12px 16px;border:0;border-radius:9px;font:inherit;cursor:pointer}.allow{background:#b8d7a5;color:#162016}.deny{background:transparent;color:#d4aaa0;border:1px solid #68514d;margin-left:8px}button:disabled{opacity:.7;cursor:wait}.account{font-size:13px}.status{min-height:1.5em;margin-bottom:0}</style><div class="wrap"><main><h1>Conectar ${clientName} con Nex</h1><p>${clientName} solicita acceso a tu estudio Nex.</p><ul>${permissions}</ul><p class="account">Cuenta: ${email}</p><form id="oauth-consent-form" method="post" action="/oauth/authorize"><input type="hidden" name="request_id" value="${requestId}"><input type="hidden" id="oauth-decision" value=""><button class="allow" type="submit" name="decision" value="allow" data-decision="allow">Autorizar conexión</button><button class="deny" type="submit" name="decision" value="deny" data-decision="deny">Cancelar</button><p class="status" id="oauth-submit-status" role="status" aria-live="polite"></p></form></main></div><script nonce="${scriptNonce}">(()=>{const form=document.getElementById("oauth-consent-form");let submitted=false;form.addEventListener("submit",event=>{if(submitted){event.preventDefault();return}const submitter=event.submitter;const decision=submitter?.getAttribute("data-decision");if(decision!=="allow"&&decision!=="deny"){event.preventDefault();return}submitted=true;const decisionField=document.getElementById("oauth-decision");decisionField.name="decision";decisionField.value=decision;form.querySelectorAll("button").forEach(button=>button.disabled=true);document.getElementById("oauth-submit-status").textContent=decision==="allow"?"Conectando con Nex…":"Cancelando…";submitter.textContent=decision==="allow"?"Conectando…":"Cancelando…"})})()</script></html>`;
   return new Response(html, {
+    headers: noStoreHeaders({
+      "content-type": "text/html; charset=utf-8",
+      "content-security-policy": `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${scriptNonce}'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`,
+      "referrer-policy": "no-referrer",
+    }),
+  });
+}
+
+function consumedConsentPage(status: number) {
+  const html = `<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Conexión ya procesada · Nex</title><style>body{margin:0;background:#101812;color:#eef2e9;font:16px/1.5 system-ui,sans-serif}.wrap{max-width:520px;margin:9vh auto;padding:28px}main{border:1px solid #344239;border-radius:16px;padding:28px;background:#18221b}h1{font-size:25px;line-height:1.2}p{color:#c2cdbf}a{display:inline-block;margin-top:12px;padding:12px 16px;border-radius:9px;background:#b8d7a5;color:#162016;text-decoration:none;font-weight:600}</style><div class="wrap"><main><h1>Esta solicitud ya se procesó</h1><p>Las autorizaciones de seguridad solo se pueden usar una vez. Vuelve a Hermes y empieza una conexión nueva con Nex.</p><a href="/cuentas">Volver a Nex</a></main></div></html>`;
+  return new Response(html, {
+    status,
     headers: noStoreHeaders({
       "content-type": "text/html; charset=utf-8",
       "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
@@ -368,14 +381,14 @@ export async function completeOAuthAuthorization(request: Request) {
     id: string; user_id: string; client_id: string; client_name: string; redirect_uri: string;
     state: string; code_challenge: string; scope: string; resource: string; expires_at: string;
   }>();
-  if (!tx) return new Response("La solicitud expiró o ya fue utilizada. Inicia la conexión nuevamente.", { status: 400, headers: noStoreHeaders() });
+  if (!tx) return consumedConsentPage(409);
 
   const completionId = randomSecret();
   if (decision === "deny") {
     const result = await db.prepare(
       "UPDATE mcp_oauth_requests SET completed_at = ?, completed_by = ? WHERE id = ? AND user_id = ? AND completed_at IS NULL AND expires_at > ?",
     ).bind(now, completionId, requestId, session.userId, now).run();
-    if (!result.meta.changes) return new Response("La solicitud expiró o ya fue utilizada.", { status: 400, headers: noStoreHeaders() });
+    if (!result.meta.changes) return consumedConsentPage(409);
     return authorizationRedirect(tx.redirect_uri, { error: "access_denied", state: tx.state, iss: requestOrigin });
   }
 
@@ -390,7 +403,7 @@ export async function completeOAuthAuthorization(request: Request) {
       "INSERT INTO mcp_oauth_codes (code_hash, user_id, client_id, redirect_uri, code_challenge, scope, resource, expires_at) SELECT ?, user_id, client_id, redirect_uri, code_challenge, scope, resource, ? FROM mcp_oauth_requests WHERE id = ? AND completed_by = ?",
     ).bind(codeHash, codeExpires, requestId, completionId),
   ]);
-  if (results[1]?.meta.changes !== 1) return new Response("La solicitud expiró o ya fue utilizada.", { status: 400, headers: noStoreHeaders() });
+  if (results[1]?.meta.changes !== 1) return consumedConsentPage(409);
   return authorizationRedirect(tx.redirect_uri, { code, state: tx.state, iss: requestOrigin });
 }
 
