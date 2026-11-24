@@ -4,8 +4,9 @@
   "account_id": "6fcab192a8cc2a3458247ef5c8108a07",
   "compatibility_date": "2026-11-09",
   "compatibility_flags": ["nodejs_compat"],
-  "main": "@tanstack/react-start/server-entry",
+  "main": "src/server.ts",
   "observability": { "enabled": true },
+  "triggers": { "crons": ["* * * * *"] },
   "d1_databases": [
     {
       "binding": "nex_db",

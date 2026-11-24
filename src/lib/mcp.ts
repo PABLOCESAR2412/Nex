@@ -1,6 +1,6 @@
 import { createServerFn, createServerOnlyFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { authMiddleware } from "./auth";
+import { authMiddleware, getCurrentSession } from "./auth";
 import { getDb, newId } from "./db";
 import { randomSecret, sha256Hex } from "./instagram";
 import { isAllowedAccountEmail } from "./auth-policy";
@@ -60,3 +60,29 @@ export const revokeMcpTokenFn = createServerFn({ method: "POST" })
     if (!result.meta.changes) throw new Error("No se encontró la conexión MCP.");
     return { ok: true };
   });
+
+export type McpAuth = { userId: string; scopes: string[] };
+export type McpScopeName = "nex:read" | "nex:write" | "nex:publish";
+
+export function hasScope(auth: McpAuth, scope: McpScopeName) {
+  return auth.scopes.includes(scope);
+}
+
+/**
+ * Quién hace una petición HTTP a una ruta que también usan los asistentes (subida de archivos, publicación).
+ * Con cabecera `Authorization` solo cuenta ese token —un token OAuth o una clave antigua, con sus permisos—,
+ * aunque el navegador envíe además la cookie de sesión. Sin ella vale la sesión web, con todos los permisos.
+ * `resolveMcpAccessToken` se importa al usarse para que el código del servidor no entre en el bundle del cliente.
+ */
+export const getRequestAuth = createServerOnlyFn(async (request: Request): Promise<McpAuth | null> => {
+  const authorization = request.headers.get("authorization");
+  if (authorization) {
+    const match = /^Bearer (\S+)$/.exec(authorization);
+    if (!match) return null;
+    const { resolveMcpAccessToken } = await import("./mcp-oauth");
+    const info = await resolveMcpAccessToken(match[1], new URL(request.url).origin);
+    return info ? { userId: info.extra.userId, scopes: [...info.scopes] } : null;
+  }
+  const session = await getCurrentSession();
+  return session ? { userId: session.userId, scopes: ["nex:read", "nex:write", "nex:publish"] } : null;
+});

@@ -1,9 +1,10 @@
 import { McpServer, requireScopes, type AuthInfo, type CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod/v4";
 import { getAssets, getDb, newId } from "./db";
-import { handleInstagramPublishRequest } from "../routes/api.social.instagram.publish";
+import { handleInstagramPublishRequest } from "./instagram-publish";
+import { cancelPublication, listPublications, schedulePublications } from "./publications";
 
-const SERVER_INSTRUCTIONS = "Nex gestiona piezas, calendario y cuentas sociales del usuario autenticado. Para adjuntar un video usa start_video_upload, sube el archivo en partes base64 de 8 MiB con upload_video_part y termina con complete_video_upload. Las publicaciones públicas requieren petición y confirmación explícitas del usuario.";
+const SERVER_INSTRUCTIONS = "Nex gestiona piezas, calendario y cuentas sociales del usuario autenticado (Instagram y TikTok). Para adjuntar un video usa start_video_upload, sube el archivo en partes base64 de 8 MiB con upload_video_part y termina con complete_video_upload. Las publicaciones públicas requieren petición y confirmación explícitas del usuario, y solo salen piezas que el usuario aprobó en Nex. Con schedule_content y account_ids (de list_social_accounts) Nex lanza cada publicación a su hora: en Instagram se publica el Reel; en TikTok el video llega como borrador a la bandeja de la cuenta (estado borrador_enviado) y el usuario lo publica desde la app de TikTok. El resultado se consulta con list_publications. Si una herramienta responde que falta un permiso, el usuario debe volver a autorizar la conexión en Nex con ese permiso.";
 const VIDEO_PART_SIZE = 8 * 1024 * 1024;
 const MAX_VIDEO_SIZE = 1024 * 1024 * 1024;
 
@@ -278,21 +279,83 @@ export function createNexMcpServer(context: NexMcpContext) {
 
   server.registerTool("schedule_content", {
     title: "Schedule Nex content",
-    description: "Programa una pieza del usuario autenticado para una fecha futura en el calendario de Nex.",
-    inputSchema: z.object({ id: z.string().min(1), scheduled_at: z.string().datetime() }).strict(),
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    description: "Programa una pieza para una fecha futura. Sin account_ids solo la coloca en el calendario de Nex. Con account_ids (de list_social_accounts) crea una publicación por cuenta que Nex lanzará sola a esa hora: la pieza debe estar aprobada en Nex por el usuario y tener un video MP4/MOV, y se necesita el permiso nex:publish. Usa account_ids solo si el usuario pidió publicar en esas cuentas a esa hora. En Instagram se publica el Reel; en TikTok el video se envía como borrador a la bandeja de la cuenta (estado borrador_enviado) y el usuario lo publica desde la app de TikTok.",
+    inputSchema: z.object({
+      id: z.string().min(1).describe("ID de la pieza devuelto por list_content o create_content."),
+      scheduled_at: z.string().datetime(),
+      account_ids: z.array(z.string().min(1)).min(1).max(10).optional().describe("IDs de cuentas conectadas (list_social_accounts). Si se omite, solo se agenda en el calendario."),
+    }).strict(),
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     scopeChallenge: requireScopes("nex:write"),
-  }, async ({ id, scheduled_at }) => {
+  }, async ({ id, scheduled_at, account_ids }) => {
     const date = new Date(scheduled_at);
     if (!Number.isFinite(date.getTime()) || date.getTime() <= Date.now()) return failure("La fecha programada debe estar en el futuro.");
+    const scheduledAt = date.toISOString();
+    if (account_ids) {
+      if (!context.authInfo?.scopes.includes("nex:publish")) {
+        return failure("Programar publicaciones en cuentas exige el permiso nex:publish. Esta conexión solo puede colocar piezas en el calendario (sin account_ids); el usuario puede volver a autorizarla con ese permiso.");
+      }
+      try {
+        const publications = await schedulePublications(userId, { contentId: id, accountIds: account_ids, scheduledAt });
+        return result({ ok: true, id, scheduled_at: scheduledAt, publications });
+      } catch (error) {
+        // Los mensajes de schedulePublications están escritos para el usuario (falta aprobar, video, cuenta desconectada…).
+        return failure(error instanceof Error ? error.message : "Nex no pudo programar la publicación.");
+      }
+    }
     try {
-      const scheduledAt = date.toISOString();
-      const updated = await getDb().prepare("UPDATE content_items SET state = 'programada', scheduled_at = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?")
+      // Solo calendario: una pieza ya aprobada conserva su estado para no perder la aprobación.
+      const updated = await getDb().prepare("UPDATE content_items SET state = CASE WHEN state = 'aprobada' THEN 'aprobada' ELSE 'programada' END, scheduled_at = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?")
         .bind(scheduledAt, id, userId).run();
       if (!updated.meta.changes) return failure("No se encontró la pieza de contenido.");
       return result({ ok: true, id, scheduled_at: scheduledAt });
     } catch {
       return failure("Nex no pudo programar la pieza.");
+    }
+  });
+
+  server.registerTool("list_social_accounts", {
+    title: "List connected social accounts",
+    description: "Lista las cuentas conectadas al estudio (Instagram y TikTok). Devuelve IDs para elegir cuentas al programar publicaciones.",
+    inputSchema: z.object({}).strict(),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    scopeChallenge: requireScopes("nex:read"),
+  }, async () => {
+    try {
+      const { results } = await getDb().prepare(
+        "SELECT id, platform, handle, status, token_expires_at FROM social_accounts WHERE user_id = ? AND external_account_id IS NOT NULL ORDER BY platform, connected_at DESC",
+      ).bind(userId).all();
+      return result(results ?? []);
+    } catch {
+      return failure("Nex no pudo cargar las cuentas conectadas.");
+    }
+  });
+
+  server.registerTool("list_publications", {
+    title: "List scheduled publications",
+    description: "Lista las publicaciones programadas y su estado (programada, en_curso, publicada, borrador_enviado, fallida, requiere_revision o cancelada). Puede filtrarse por pieza.",
+    inputSchema: z.object({ content_id: z.string().min(1).optional() }).strict(),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    scopeChallenge: requireScopes("nex:read"),
+  }, async ({ content_id }) => {
+    try {
+      return result(await listPublications(userId, content_id));
+    } catch {
+      return failure("Nex no pudo cargar las publicaciones.");
+    }
+  });
+
+  server.registerTool("cancel_publication", {
+    title: "Cancel a scheduled publication",
+    description: "Cancela una publicación programada que todavía no ha empezado.",
+    inputSchema: z.object({ id: z.string().min(1).describe("ID devuelto por list_publications.") }).strict(),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    scopeChallenge: requireScopes("nex:publish"),
+  }, async ({ id }) => {
+    try {
+      return result(await cancelPublication(userId, id));
+    } catch (error) {
+      return failure(error instanceof Error ? error.message : "Nex no pudo cancelar la publicación.");
     }
   });
 

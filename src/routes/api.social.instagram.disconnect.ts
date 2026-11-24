@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getCurrentSession } from "../lib/auth";
 import { getDb } from "../lib/db";
+import { failOpenPublicationsForAccount } from "../lib/publications";
 
 export const Route = createFileRoute("/api/social/instagram/disconnect")({
   server: {
@@ -24,6 +25,8 @@ export const Route = createFileRoute("/api/social/instagram/disconnect")({
           db.prepare("UPDATE instagram_publish_jobs SET status = 'failed', error = 'Cuenta desconectada durante la publicación.', updated_at = datetime('now') WHERE account_id = ? AND user_id = ? AND status IN ('creating', 'processing', 'publishing')")
             .bind(input.accountId, session.userId),
         ]);
+        // Igual que en TikTok: lo programado o en curso para esta cuenta se cierra ahora, no cuando el cron lo encuentre.
+        await failOpenPublicationsForAccount(session.userId, input.accountId, "Cuenta desconectada antes de terminar la publicación.");
         return Response.json({ ok: true });
       },
     },

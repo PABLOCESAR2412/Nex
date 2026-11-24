@@ -1,6 +1,6 @@
 # Nex
 
-Nex es un espacio de trabajo para preparar, revisar y organizar contenido. La biblioteca guarda piezas, guiones, estados y fechas en D1; los videos, imágenes y PDF se almacenan en R2. El calendario y el panel de Inicio muestran esos datos. Instagram se puede conectar con OAuth y publicar Reels confirmados desde la biblioteca; TikTok, YouTube y la publicación automática de fechas programadas siguen pendientes.
+Nex es un espacio de trabajo para preparar, revisar y publicar contenido. La biblioteca guarda piezas, guiones, estados y fechas en D1; los videos, imágenes y PDF se almacenan en R2. Un agente (Hermes, Claude, ChatGPT u otro cliente MCP) puede subir y programar piezas por MCP. Nex publica en Instagram (Reels) y envía videos a la bandeja de TikTok como borrador, a la hora programada y por cuenta, con un Cron Trigger de Cloudflare. YouTube sigue pendiente.
 
 ## Tecnologías
 
@@ -31,9 +31,12 @@ Comprobaciones y vista previa:
 
 ```sh
 bun run typecheck
+bun run test
 bun run build
 bun run preview
 ```
+
+Las pruebas usan una base D1 real de Wrangler con las migraciones aplicadas, un R2 en memoria y las APIs de Instagram y TikTok simuladas; no llaman a ninguna red social.
 
 Despliegue manual desde una sesión autenticada con Wrangler:
 
@@ -50,6 +53,8 @@ El Worker existente se llama `nex` y está conectado al repositorio `PABLOCESAR2
 - **Deploy command:** `bun run deploy`
 - **Root directory:** `/`
 
+`bun run deploy` aplica primero las migraciones de D1 (son aditivas, así que el código anterior sigue funcionando con ellas) y después publica el Worker, para que el cron nunca corra código nuevo contra una base sin actualizar.
+
 El comando de build es necesario para que TanStack Start y Vite generen el Worker y los assets. Si queda vacío, `wrangler deploy` no tendrá una compilación válida que publicar. La conexión y el token de Workers Builds siguen gestionándose desde Cloudflare; no se guardan secretos en este repositorio.
 
 ## Visión del producto
@@ -61,12 +66,13 @@ Nex es un centro en la nube para preparar, revisar y programar contenido, ademá
 2. El harness usa las skills de guion, diseño y video para preparar el material y renderizarlo.
 3. Sube el resultado a Nex, donde queda guardado con su guion, descripción, plataforma y estado.
 4. Lo revisas y apruebas.
-5. Nex lo programa para las cuentas conectadas y muestra su estado.
+5. Eliges las cuentas y la hora: Nex publica en Instagram o deja el borrador en la bandeja de TikTok y muestra el estado de cada publicación.
 
 ### Qué hace cada parte
-- **Asistentes:** crear borradores, cargar videos, consultar contenido y cuentas, programar fechas y publicar mediante MCP con autorización OAuth.
-- **Nex:** organizar piezas, guiones, archivos, estados de revisión y fechas en el calendario. El endpoint MCP permite listar, crear y programar piezas para la sesión autenticada.
-- **Instagram:** conectar una cuenta profesional con Instagram Login y publicar un Reel desde una pieza aprobada.
+- **Asistentes:** crear borradores, cargar videos, consultar contenido y cuentas, programar y cancelar publicaciones y publicar mediante MCP con autorización OAuth.
+- **Nex:** organizar piezas, guiones, archivos, estados de revisión y fechas en el calendario, y publicar por cuenta. El endpoint MCP trabaja con la sesión autenticada y los permisos que aceptaste.
+- **Instagram:** conectar cuentas profesionales con Instagram Login y publicar Reels de piezas aprobadas.
+- **TikTok:** conectar una cuenta y subir el video a su bandeja como borrador; la persona lo revisa y lo publica desde la app de TikTok.
 - **Cloudflare:** alojar la aplicación y su API en Workers, guardar información en D1, almacenar videos y archivos en R2, y ejecutar tareas programadas.
 - **GitHub, Cloudflare y Vercel:** conectar repositorios y gestionar despliegues desde Nex.
 
@@ -77,31 +83,41 @@ El render de video se ejecuta en el equipo donde corre el harness (Workers no es
 ```text
 src/
   components/
-    home-page.tsx    # resumen desde piezas y fechas guardadas
-    studio-shell.tsx # navegación compartida y cabecera
-    studio-pages.tsx # calendario y biblioteca funcionales; cuentas, despliegues y ajustes
+    home-page.tsx           # resumen desde piezas y fechas guardadas
+    studio-shell.tsx        # navegación, cabecera y diálogo de conexión MCP
+    studio-pages.tsx        # calendario, biblioteca y cuentas (Instagram y TikTok)
+    publications-panel.tsx  # programar, seguir y cancelar publicaciones por cuenta
+  lib/
+    mcp-server.ts           # herramientas MCP
+    mcp-http.ts, mcp-oauth*.ts  # transporte MCP y OAuth 2.1 (registro, código + PKCE, tokens)
+    mcp.ts                  # identifica peticiones HTTP: token OAuth o sesión
+    publications.ts         # publicaciones por cuenta y ciclo del cron
+    instagram*.ts           # OAuth, publicación y renovación de tokens de Instagram
+    tiktok.ts               # OAuth, subida por trozos y estado de TikTok
+    token-crypto.ts         # cifrado de tokens y hashes
   routes/
-    __root.tsx       # documento HTML, metadatos y estilos globales
-    index.tsx        # Inicio
-    calendario.tsx   # Calendario
-    biblioteca.tsx   # Biblioteca
-    cuentas.tsx      # Cuentas
-    despliegues.tsx  # Despliegues
-    ajustes.tsx      # Ajustes
+    __root.tsx, index.tsx, calendario.tsx, biblioteca.tsx, cuentas.tsx, despliegues.tsx, ajustes.tsx
     api/
-      mcp.ts         # herramientas MCP de contenido
-      content.*.ts   # carga multipart y acceso autenticado a R2
-      social.*.ts    # OAuth, cuentas y publicación de Reels
-  router.tsx         # configuración de TanStack Router
-  styles.css         # Tailwind y tokens visuales conservados
-public/assets/       # marca e ilustración SVG
-wrangler.jsonc       # entrada del Worker y configuración de Cloudflare
-migrations/          # esquema inicial, contenido e Instagram
-DESIGN.md            # sistema visual y reglas para futuras vistas
-PRODUCT.md           # alcance del producto y límites de esta fase
+      mcp.ts                # endpoint MCP
+      content.*.ts          # carga multipart y acceso autenticado a R2
+    api.social.*.ts         # OAuth, cuentas y publicación de Instagram y TikTok
+    oauth.*.ts              # registro, autorización y token de OAuth
+    [.]well-known.*.ts      # metadatos de OAuth para conectores
+  server.ts                 # entrada del Worker: fetch y Cron Trigger
+  router.tsx                # configuración de TanStack Router
+  styles.css                # Tailwind y tokens visuales conservados
+public/assets/              # marca e ilustración SVG
+wrangler.jsonc              # entrada del Worker, bindings y cron
+migrations/                 # esquema: contenido, Instagram, MCP y OAuth, publicaciones, TikTok
+DESIGN.md                   # sistema visual y reglas para futuras vistas
+PRODUCT.md                  # alcance del producto y límites de esta fase
 ```
 
-Las fechas programadas se organizan dentro de Nex, pero todavía no disparan publicaciones automáticas. Para publicar en Instagram, la pieza debe estar aprobada, tener un video MP4 o MOV de hasta 1 GB y la persona debe confirmar la publicación. La API está orientada a cuentas profesionales Business o Creator; consulta la [documentación de Instagram de Meta](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/).
+## Acceso y seguridad
+
+- **Acceso restringido:** solo el correo autorizado puede crear cuenta e iniciar sesión.
+- **Tokens de redes sociales:** se cifran antes de guardarse en D1 con `TOKEN_ENCRYPTION_KEY` (o `INSTAGRAM_TOKEN_ENCRYPTION_KEY`, que tiene prioridad si existe). Si cambias esa clave, hay que volver a conectar las cuentas.
+- **Aprobación:** solo se publican piezas que tú aprobaste; un agente no puede saltarse ese paso.
 
 ## Conectar asistentes por MCP
 
@@ -109,13 +125,22 @@ El endpoint remoto es <code>https://&lt;dominio-publico-de-nex&gt;/api/mcp</code
 
 - **Hermes:** en la cabecera de Nex, pulsa **Conectar MCP** y luego **Añadir Nex a Hermes**. Hermes abre Nex para iniciar sesión y autorizar los permisos.
 - **ChatGPT:** abre ChatGPT web, entra en **Ajustes → Apps o Plugins → Añadir servidor MCP personalizado**, pega la dirección MCP que Nex muestra en el mismo cuadro y elige OAuth. La primera autorización enlaza la cuenta Nex.
-- **Permisos:** `nex:read` consulta datos, `nex:write` crea borradores, programa fechas y carga videos, y `nex:publish` publica Reels confirmados y consulta su estado.
+- **Permisos:** `nex:read` consulta piezas, cuentas conectadas y publicaciones; `nex:write` crea borradores, carga videos y coloca piezas en el calendario; `nex:publish` programa publicaciones en cuentas, las cancela, publica Reels confirmados y consulta su estado. `schedule_content` con `account_ids` exige `nex:publish`.
 - **Videos:** Hermes usa `start_video_upload`, `upload_video_part` y `complete_video_upload` para enviar MP4/MOV en partes de 8 MiB directamente a R2; tamaño máximo 1 GiB. No se descargan URLs arbitrarias. Si una carga se interrumpe, puede cancelarse con `abort_video_upload`.
+- **Publicaciones:** `list_social_accounts` devuelve las cuentas de Instagram y TikTok; `schedule_content` con `account_ids` crea una publicación por cuenta; `list_publications` muestra su estado y `cancel_publication` cancela las que aún no empezaron.
 - **Perfiles:** `get_profile` devuelve un identificador estable para que ChatGPT reconozca la cuenta Nex conectada.
 
 ChatGPT habilita las conexiones MCP personalizadas desde web; las acciones de escritura requieren Business, Enterprise o Edu. Pro permite herramientas de lectura. Consulta los [requisitos actuales de ChatGPT](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt) antes de configurar la conexión.
 
 El despliegue configurado usa `bun run deploy`, que aplica las migraciones D1 remotas antes de publicar el Worker. La migración OAuth `0005_mcp_oauth.sql` también revoca los tokens Bearer antiguos para que las nuevas conexiones usen OAuth.
+
+## Publicación programada
+
+Una publicación es una fila por pieza y cuenta (`programada`, `en_curso`, `publicada`, `borrador_enviado`, `fallida`, `requiere_revision` o `cancelada`). En Biblioteca, o con `schedule_content` y `account_ids`, eliges las cuentas y la hora; solo se pueden programar piezas aprobadas con un video MP4 o MOV de hasta 1 GB. La API de Instagram está orientada a cuentas profesionales Business o Creator; consulta la [documentación de Instagram de Meta](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/).
+
+Un Cron Trigger (`wrangler.jsonc`, cada minuto) lanza las publicaciones vencidas, consulta las que están en curso y, a la hora en punto, renueva los tokens de Instagram que vencen en menos de 14 días. Cada publicación se reclama con una actualización condicional para no publicarse dos veces. Si una publicación queda más de dos horas sin resolverse pasa a `requiere_revision`: revisa la red social antes de reintentar.
+
+Para publicar en Instagram a la hora programada, `PUBLIC_APP_URL` es obligatorio: Meta descarga el video desde una URL temporal de Nex.
 
 ## Instagram
 
@@ -127,8 +152,23 @@ Configura estas variables para cada entorno:
 - <code>INSTAGRAM_GRAPH_VERSION</code>: versión Graph vigente habilitada para esa app, por ejemplo v27.0.
 - <code>PUBLIC_APP_URL</code>: URL HTTPS pública base de Nex, sin ruta adicional.
 - <code>INSTAGRAM_APP_SECRET</code>: secreto de Worker; no lo guardes en el repositorio.
-- <code>INSTAGRAM_TOKEN_ENCRYPTION_KEY</code>: secreto aleatorio de al menos 32 bytes para cifrar tokens antes de guardarlos en D1.
+- <code>INSTAGRAM_TOKEN_ENCRYPTION_KEY</code> o <code>TOKEN_ENCRYPTION_KEY</code>: secreto aleatorio de al menos 32 bytes para cifrar tokens antes de guardarlos en D1.
 
 En Cloudflare, guarda app secret y clave de cifrado como Worker secrets (<code>wrangler secret put INSTAGRAM_APP_SECRET</code> y <code>wrangler secret put INSTAGRAM_TOKEN_ENCRYPTION_KEY</code>). Para desarrollo local, define las mismas variables en <code>.dev.vars</code>, que está excluido de Git. Si cambias la clave de cifrado después de conectar cuentas, Nex ya no podrá descifrar sus tokens y será necesario volver a conectar cada cuenta.
 
-En Cuentas, conecta la cuenta profesional. En Biblioteca, aprueba una pieza con video y pulsa Publicar Reel; Nex pedirá confirmación, entregará a Meta una URL temporal con acceso limitado al archivo R2 y revisará el estado del contenedor antes de publicar. La URL temporal vence en ocho horas. La publicación programada automáticamente se implementará aparte.
+En Cuentas, conecta la cuenta profesional. En Biblioteca, aprueba una pieza con video y pulsa Publicar Reel; Nex pedirá confirmación, entregará a Meta una URL temporal con acceso limitado al archivo R2 y revisará el estado del contenedor antes de publicar. La URL temporal vence en ocho horas. Para publicar a una hora programada, usa el panel de publicaciones de la pieza (ver Publicación programada).
+
+## TikTok
+
+Nex usa la Content Posting API en modo «subir»: envía el video a la bandeja de TikTok como borrador y **la persona lo revisa, escribe la descripción y lo publica desde la app**. No usa Direct Post, que exige una auditoría de TikTok. Por eso, una publicación de TikTok termina en `borrador_enviado` y la pieza no se marca como publicada.
+
+En TikTok for Developers, crea la app, activa Login Kit y Content Posting API con el permiso `video.upload`, y registra esta URI de redirección exacta: `https://<dominio-publico>/api/social/tiktok/callback`. Si la app está en modo sandbox, añade tu cuenta de TikTok como usuario de prueba.
+
+Variables:
+
+- `TIKTOK_CLIENT_KEY`: client key de la app.
+- `TIKTOK_CLIENT_SECRET`: secreto de Worker (`wrangler secret put TIKTOK_CLIENT_SECRET`).
+- `TOKEN_ENCRYPTION_KEY`: la misma clave de cifrado de arriba (si ya usas `INSTAGRAM_TOKEN_ENCRYPTION_KEY`, no hace falta otra).
+- `PUBLIC_APP_URL`: origen HTTPS público de Nex.
+
+El token de acceso de TikTok dura 24 horas: Nex lo renueva solo con el refresh token (365 días) y guarda el par rotado, cifrado. Los videos se suben desde R2 por trozos de hasta 64 MB; cada ciclo del cron sube alrededor de 128 MB y continúa en el siguiente, así que un video grande puede tardar varios minutos. El enlace de subida de TikTok dura una hora. Según la documentación de TikTok, solo puede haber 5 borradores pendientes cada 24 horas por cuenta: si se supera, la publicación falla con un mensaje claro. El conector está probado con la API simulada y la subida por trozos con el runtime real de Workers, pero **no se ha probado contra una cuenta real de TikTok**.

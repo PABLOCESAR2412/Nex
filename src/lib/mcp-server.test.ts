@@ -24,7 +24,7 @@ vi.mock("./db", () => ({
   newId: () => "test-upload-row-id",
 }));
 
-vi.mock("../routes/api.social.instagram.publish", () => ({
+vi.mock("./instagram-publish", () => ({
   handleInstagramPublishRequest: vi.fn(),
 }));
 

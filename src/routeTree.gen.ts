@@ -30,6 +30,9 @@ import { Route as ApiSocialInstagramCallbackRouteImport } from './routes/api.soc
 import { Route as ApiSocialInstagramConnectRouteImport } from './routes/api.social.instagram.connect'
 import { Route as ApiSocialInstagramDisconnectRouteImport } from './routes/api.social.instagram.disconnect'
 import { Route as ApiSocialInstagramPublishRouteImport } from './routes/api.social.instagram.publish'
+import { Route as ApiSocialTiktokCallbackRouteImport } from './routes/api.social.tiktok.callback'
+import { Route as ApiSocialTiktokConnectRouteImport } from './routes/api.social.tiktok.connect'
+import { Route as ApiSocialTiktokDisconnectRouteImport } from './routes/api.social.tiktok.disconnect'
 import { Route as ApiSocialInstagramMediaTokenRouteImport } from './routes/api.social.instagram.media.$token'
 
 const IndexRoute = IndexRouteImport.update({
@@ -143,6 +146,22 @@ const ApiSocialInstagramPublishRoute =
     path: '/api/social/instagram/publish',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiSocialTiktokCallbackRoute = ApiSocialTiktokCallbackRouteImport.update({
+  id: '/api/social/tiktok/callback',
+  path: '/api/social/tiktok/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSocialTiktokConnectRoute = ApiSocialTiktokConnectRouteImport.update({
+  id: '/api/social/tiktok/connect',
+  path: '/api/social/tiktok/connect',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSocialTiktokDisconnectRoute =
+  ApiSocialTiktokDisconnectRouteImport.update({
+    id: '/api/social/tiktok/disconnect',
+    path: '/api/social/tiktok/disconnect',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiSocialInstagramMediaTokenRoute =
   ApiSocialInstagramMediaTokenRouteImport.update({
     id: '/api/social/instagram/media/$token',
@@ -172,6 +191,9 @@ export interface FileRoutesByFullPath {
   '/api/social/instagram/connect': typeof ApiSocialInstagramConnectRoute
   '/api/social/instagram/disconnect': typeof ApiSocialInstagramDisconnectRoute
   '/api/social/instagram/publish': typeof ApiSocialInstagramPublishRoute
+  '/api/social/tiktok/callback': typeof ApiSocialTiktokCallbackRoute
+  '/api/social/tiktok/connect': typeof ApiSocialTiktokConnectRoute
+  '/api/social/tiktok/disconnect': typeof ApiSocialTiktokDisconnectRoute
   '/api/social/instagram/media/$token': typeof ApiSocialInstagramMediaTokenRoute
 }
 export interface FileRoutesByTo {
@@ -196,6 +218,9 @@ export interface FileRoutesByTo {
   '/api/social/instagram/connect': typeof ApiSocialInstagramConnectRoute
   '/api/social/instagram/disconnect': typeof ApiSocialInstagramDisconnectRoute
   '/api/social/instagram/publish': typeof ApiSocialInstagramPublishRoute
+  '/api/social/tiktok/callback': typeof ApiSocialTiktokCallbackRoute
+  '/api/social/tiktok/connect': typeof ApiSocialTiktokConnectRoute
+  '/api/social/tiktok/disconnect': typeof ApiSocialTiktokDisconnectRoute
   '/api/social/instagram/media/$token': typeof ApiSocialInstagramMediaTokenRoute
 }
 export interface FileRoutesById {
@@ -221,6 +246,9 @@ export interface FileRoutesById {
   '/api/social/instagram/connect': typeof ApiSocialInstagramConnectRoute
   '/api/social/instagram/disconnect': typeof ApiSocialInstagramDisconnectRoute
   '/api/social/instagram/publish': typeof ApiSocialInstagramPublishRoute
+  '/api/social/tiktok/callback': typeof ApiSocialTiktokCallbackRoute
+  '/api/social/tiktok/connect': typeof ApiSocialTiktokConnectRoute
+  '/api/social/tiktok/disconnect': typeof ApiSocialTiktokDisconnectRoute
   '/api/social/instagram/media/$token': typeof ApiSocialInstagramMediaTokenRoute
 }
 export interface FileRouteTypes {
@@ -247,6 +275,9 @@ export interface FileRouteTypes {
     | '/api/social/instagram/connect'
     | '/api/social/instagram/disconnect'
     | '/api/social/instagram/publish'
+    | '/api/social/tiktok/callback'
+    | '/api/social/tiktok/connect'
+    | '/api/social/tiktok/disconnect'
     | '/api/social/instagram/media/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -271,6 +302,9 @@ export interface FileRouteTypes {
     | '/api/social/instagram/connect'
     | '/api/social/instagram/disconnect'
     | '/api/social/instagram/publish'
+    | '/api/social/tiktok/callback'
+    | '/api/social/tiktok/connect'
+    | '/api/social/tiktok/disconnect'
     | '/api/social/instagram/media/$token'
   id:
     | '__root__'
@@ -295,6 +329,9 @@ export interface FileRouteTypes {
     | '/api/social/instagram/connect'
     | '/api/social/instagram/disconnect'
     | '/api/social/instagram/publish'
+    | '/api/social/tiktok/callback'
+    | '/api/social/tiktok/connect'
+    | '/api/social/tiktok/disconnect'
     | '/api/social/instagram/media/$token'
   fileRoutesById: FileRoutesById
 }
@@ -320,6 +357,9 @@ export interface RootRouteChildren {
   ApiSocialInstagramConnectRoute: typeof ApiSocialInstagramConnectRoute
   ApiSocialInstagramDisconnectRoute: typeof ApiSocialInstagramDisconnectRoute
   ApiSocialInstagramPublishRoute: typeof ApiSocialInstagramPublishRoute
+  ApiSocialTiktokCallbackRoute: typeof ApiSocialTiktokCallbackRoute
+  ApiSocialTiktokConnectRoute: typeof ApiSocialTiktokConnectRoute
+  ApiSocialTiktokDisconnectRoute: typeof ApiSocialTiktokDisconnectRoute
   ApiSocialInstagramMediaTokenRoute: typeof ApiSocialInstagramMediaTokenRoute
 }
 
@@ -472,6 +512,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSocialInstagramPublishRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/social/tiktok/callback': {
+      id: '/api/social/tiktok/callback'
+      path: '/api/social/tiktok/callback'
+      fullPath: '/api/social/tiktok/callback'
+      preLoaderRoute: typeof ApiSocialTiktokCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/social/tiktok/connect': {
+      id: '/api/social/tiktok/connect'
+      path: '/api/social/tiktok/connect'
+      fullPath: '/api/social/tiktok/connect'
+      preLoaderRoute: typeof ApiSocialTiktokConnectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/social/tiktok/disconnect': {
+      id: '/api/social/tiktok/disconnect'
+      path: '/api/social/tiktok/disconnect'
+      fullPath: '/api/social/tiktok/disconnect'
+      preLoaderRoute: typeof ApiSocialTiktokDisconnectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/social/instagram/media/$token': {
       id: '/api/social/instagram/media/$token'
       path: '/api/social/instagram/media/$token'
@@ -506,6 +567,9 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSocialInstagramConnectRoute: ApiSocialInstagramConnectRoute,
   ApiSocialInstagramDisconnectRoute: ApiSocialInstagramDisconnectRoute,
   ApiSocialInstagramPublishRoute: ApiSocialInstagramPublishRoute,
+  ApiSocialTiktokCallbackRoute: ApiSocialTiktokCallbackRoute,
+  ApiSocialTiktokConnectRoute: ApiSocialTiktokConnectRoute,
+  ApiSocialTiktokDisconnectRoute: ApiSocialTiktokDisconnectRoute,
   ApiSocialInstagramMediaTokenRoute: ApiSocialInstagramMediaTokenRoute,
 }
 export const routeTree = rootRouteImport
