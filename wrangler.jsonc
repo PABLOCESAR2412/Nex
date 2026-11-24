@@ -10,13 +10,21 @@
   "d1_databases": [
     {
       "binding": "nex_db",
-      "database_name": "nex-db"
+      "database_name": "nex-db",
+      "database_id": "0df29765-c891-4692-b2f1-e3999f645b99"
     }
   ],
   "r2_buckets": [
     {
       "binding": "nex_assets",
       "bucket_name": "nex-assets"
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "NEX_OAUTH_REGISTRATION_LIMITER",
+      "namespace_id": "951320261115",
+      "simple": { "limit": 100, "period": 60 }
     }
   ]
 }

@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { loginFn, registerFn, registrationOpenFn } from "../lib/auth";
+import { useState } from "react";
+import { loginFn, registerFn } from "../lib/auth";
+import { safeInternalDestination } from "../lib/safe-next";
 
 export function LoginPage() {
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -8,27 +9,26 @@ export function LoginPage() {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [registrationOpen, setRegistrationOpen] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    registrationOpenFn().then((result) => { if (!cancelled) setRegistrationOpen(result.open); }).catch(() => undefined);
-    return () => { cancelled = true; };
-  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
     try {
+      let passwordChangeRequired = false;
       if (mode === "register") {
         await registerFn({ data: { email, password, name } });
       } else {
-        await loginFn({ data: { email, password } });
+        const result = await loginFn({ data: { email, password } });
+        passwordChangeRequired = result.passwordChangeRequired;
       }
       const requestedPath = new URLSearchParams(window.location.search).get("next");
-      const destination = requestedPath?.startsWith("/") && !requestedPath.startsWith("//") ? requestedPath : "/";
-      window.location.replace(destination);
+      const destination = safeInternalDestination(requestedPath, window.location.origin);
+      if (passwordChangeRequired) {
+        window.location.replace(`/password?next=${encodeURIComponent(destination)}`);
+      } else {
+        window.location.replace(destination);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo iniciar sesión.");
     } finally {
@@ -59,11 +59,9 @@ export function LoginPage() {
         <button className="primary-button" type="submit" disabled={loading}>
           {loading ? "Procesando…" : mode === "login" ? "Entrar" : "Crear cuenta"}
         </button>
-        {(registrationOpen || mode === "register") && (
-          <button type="button" className="quiet-button" onClick={() => setMode(mode === "login" ? "register" : "login")}>
-            {mode === "login" ? "¿No tienes cuenta? Regístrate" : "¿Ya tienes cuenta? Inicia sesión"}
-          </button>
-        )}
+        <button type="button" className="quiet-button" onClick={() => setMode(mode === "login" ? "register" : "login")}>
+          {mode === "login" ? "¿No tienes cuenta? Regístrate" : "¿Ya tienes cuenta? Inicia sesión"}
+        </button>
       </form>
     </main>
   );

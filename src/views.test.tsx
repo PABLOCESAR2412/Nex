@@ -1,16 +1,23 @@
 /// <reference types="vitest/globals" />
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
-import { vi } from "vitest";
+import { beforeEach, vi } from "vitest";
 import { routeTree } from "./routeTree.gen";
+import { SessionShellSkeleton } from "./components/loading-skeletons";
+import { meFn } from "./lib/auth";
+import { listRegisteredUsersFn } from "./lib/user-admin-client";
 
 vi.mock("./lib/auth", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./lib/auth")>();
   return {
     ...actual,
-    meFn: vi.fn().mockResolvedValue({ id: "test-user", name: "Pablo", email: "pablo@example.test" }),
+    meFn: vi.fn().mockResolvedValue({ id: "test-user", name: "Pablo", email: "pablo@example.test", password_change_required: false }),
   };
 });
+
+vi.mock("./lib/user-admin-client", () => ({
+  listRegisteredUsersFn: vi.fn().mockResolvedValue({ status: "not_configured" }),
+}));
 
 function renderRoute(path: string) {
   const history = createMemoryHistory({ initialEntries: [path] });
@@ -19,6 +26,23 @@ function renderRoute(path: string) {
 }
 
 describe("Nex views smoke", () => {
+  beforeEach(() => {
+    vi.mocked(meFn).mockReset().mockResolvedValue({ id: "test-user", name: "Pablo", email: "pablo@example.test", password_change_required: false });
+    vi.mocked(listRegisteredUsersFn).mockReset().mockResolvedValue({ status: "not_configured" });
+  });
+  it("checks the session only once while navigating between studio views", async () => {
+    renderRoute("/");
+    await screen.findByRole("heading", { name: /tu estudio de contenido/i });
+    expect(meFn).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("link", { name: "Biblioteca" }));
+    await screen.findByRole("heading", { name: "Biblioteca" });
+    expect(meFn).toHaveBeenCalledTimes(1);
+  });
+  it("shows a labeled shell skeleton while the session is loading", () => {
+    render(<SessionShellSkeleton />);
+    expect(screen.getByRole("status", { name: "Cargando tu estudio" })).toBeInTheDocument();
+  });
   it("renders home", async () => {
     renderRoute("/");
     await waitFor(() => expect(screen.getByRole("heading", { name: /tu estudio de contenido/i })).toBeInTheDocument());
@@ -42,6 +66,21 @@ describe("Nex views smoke", () => {
   it("renders settings", async () => {
     renderRoute("/ajustes");
     await waitFor(() => expect(screen.getByRole("heading", { name: /ajustes/i })).toBeInTheDocument());
+  });
+  it("shows the registered-users section in settings", async () => {
+    renderRoute("/ajustes");
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Usuarios registrados" })).toBeInTheDocument());
+  });
+  it("shows registered-user details for an authorized administrator", async () => {
+    vi.mocked(listRegisteredUsersFn).mockResolvedValue({
+      status: "ready",
+      total: 1,
+      truncated: false,
+      users: [{ name: "Ana", email: "ana@example.test", created_at: "2026-11-14 10:00:00", active_sessions: 1 }],
+    });
+    renderRoute("/ajustes");
+    expect(await screen.findByText("ana@example.test")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Sesiones activas" })).toBeInTheDocument();
   });
   it("renders 404 for unknown route", async () => {
     renderRoute("/no-existe");

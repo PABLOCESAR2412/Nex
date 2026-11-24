@@ -5,8 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { encryptInstagramToken } from "./lib/instagram";
 import { handleInstagramPublishRequest } from "./lib/instagram-publish";
 import { cancelPublication, listPublications, registerPublicationAdapter, runPublicationCycle, schedulePublications, type PublicationAdapter } from "./lib/publications";
-import { Route as McpRoute } from "./routes/api/mcp";
-import { approvedVideo, bearer, seedContent, seedMcpToken, seedSocialAccount, seedUser } from "./test-utils/fixtures";
+import { approvedVideo, seedContent, seedSocialAccount, seedUser } from "./test-utils/fixtures";
 import { createFakeBucket, createTestDatabase } from "./test-utils/worker-env";
 
 vi.mock("./lib/session", () => ({ readSessionToken: () => null, setSessionCookie: vi.fn(), clearSessionCookie: vi.fn() }));
@@ -260,51 +259,5 @@ describe("Instagram a través del cron", () => {
     const start = (payload: Record<string, unknown>) => handleInstagramPublishRequest(new Request("https://nex.test/x", { method: "POST", body: JSON.stringify({ action: "start", contentId, accountId: account, ...payload }) }), userId);
     expect((await start({})).status).toBe(400);
     expect((await start({ publicationId: "no-existe" })).status).toBe(400);
-  });
-});
-
-describe("herramientas MCP de publicaciones", () => {
-  async function call(token: string, name: string, args: Record<string, unknown>) {
-    const response = await (McpRoute as unknown as { options: { server: { handlers: { POST: (c: { request: Request }) => Promise<Response> } } } }).options.server.handlers.POST({
-      request: new Request("https://nex.test/api/mcp", { method: "POST", headers: { "content-type": "application/json", ...bearer(token) }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }) }),
-    });
-    const body = await response.json() as { result?: { isError?: boolean; content: Array<{ text: string }> }; error?: { message: string } };
-    return { isError: body.result?.isError === true, error: body.error?.message, data: body.result && !body.result.isError ? JSON.parse(body.result.content[0].text) : undefined, text: body.result?.content[0].text };
-  }
-
-  it("programa en cuentas, lista y cancela", async () => {
-    const token = await seedMcpToken(testDb.db, userId);
-    const contentId = await seedContent(testDb.db, userId, approvedVideo());
-    const account = await seedSocialAccount(testDb.db, userId, { platform: "Instagram", handle: "@nex" });
-
-    const accounts = await call(token, "list_social_accounts", {});
-    expect(accounts.data).toEqual([expect.objectContaining({ id: account, platform: "Instagram", handle: "@nex" })]);
-
-    const scheduledResult = await call(token, "schedule_content", { id: contentId, scheduled_at: inOneHour(), account_ids: [account] });
-    expect(scheduledResult.data.publications).toHaveLength(1);
-    const listed = await call(token, "list_publications", { content_id: contentId });
-    expect(listed.data).toHaveLength(1);
-    const cancelled = await call(token, "cancel_publication", { id: listed.data[0].id });
-    expect(cancelled.data).toEqual({ ok: true });
-    expect((await listPublications(userId))[0].status).toBe("cancelada");
-  });
-
-  it("un agente no puede programar publicaciones de una pieza sin aprobar", async () => {
-    const token = await seedMcpToken(testDb.db, userId);
-    const contentId = await seedContent(testDb.db, userId, { ...approvedVideo(), state: "borrador" });
-    const account = await seedSocialAccount(testDb.db, userId);
-    const result = await call(token, "schedule_content", { id: contentId, scheduled_at: inOneHour(), account_ids: [account] });
-    expect(result.isError).toBe(true);
-    expect(result.text).toMatch(/Aprueba la pieza/);
-  });
-
-  it("programar solo en el calendario no pierde la aprobación", async () => {
-    const token = await seedMcpToken(testDb.db, userId);
-    const approved = await seedContent(testDb.db, userId, approvedVideo());
-    const draft = await seedContent(testDb.db, userId, { state: "borrador" });
-    await call(token, "schedule_content", { id: approved, scheduled_at: inOneHour() });
-    await call(token, "schedule_content", { id: draft, scheduled_at: inOneHour() });
-    expect((await contentRow(approved))?.state).toBe("aprobada");
-    expect((await contentRow(draft))?.state).toBe("programada");
   });
 });

@@ -39,12 +39,12 @@ Content generation can happen in a local or external harness; Nex is the cloud w
 The user expects to create videos with DeepSeek Harness and local tools, then store and manage the finished material in a web application. A dedicated VPS is not part of the initial hosting plan.
 
 ## Capabilities and Constraints
-- Inicio reflects saved content and dates. Biblioteca supports content creation, editing, deletion, scripts, planned channels, review states, per-account scheduling with status tracking, and authenticated media uploads to R2. Calendario reads those dates and supports weekly navigation.
-- MCP: keys have permissions (`content:read`, `content:write`, `publish`); connectors can authenticate with OAuth 2.1 (PKCE S256, dynamic client registration, rotating refresh tokens). OAuth follows the standard and is tested in workerd, but has not been tried against real claude.ai or ChatGPT connectors. A dependency-free script (`/nex-upload.mjs`) uploads local files with a key.
+- Inicio reflects saved content and dates. Biblioteca supports content creation, editing, deletion, scripts, planned channels, review states, per-account scheduling with status tracking, and authenticated media uploads to R2. Calendario reads those dates and supports monthly navigation.
+- MCP clients authenticate with OAuth 2.1 (PKCE, dynamic client registration, rotating refresh tokens) and the permissions `nex:read`, `nex:write` and `nex:publish`. They can list and create content, upload video parts to R2, list connected accounts, schedule and cancel per-account publications, and publish confirmed Reels. Nex does not download third-party URLs. OAuth has not been tried against real claude.ai or ChatGPT connectors beyond what the standard and the tests cover.
 - Publications are one row per piece and account. The Cron Trigger starts due publications once (conditional claim) and polls those in progress; anything unresolved after two hours becomes "requires review" instead of being retried blindly.
 - Instagram requires an approved piece with an MP4 or MOV video no larger than 1 GB and an Instagram professional account. Nex creates a short-lived public capability URL for Meta to fetch the private R2 asset (eight hours); scheduled Instagram publishing therefore needs `PUBLIC_APP_URL`. Long-lived tokens are renewed automatically when fewer than 14 days remain.
 - TikTok uses the Content Posting API upload flow: the video goes to the creator's inbox as a draft and the person adds the caption and publishes it in the TikTok app. Direct Post is not used because it requires an audit. Uploads are chunked from R2 across cron cycles. Not yet verified against a real TikTok account.
-- Registration is closed after the first user (set `ALLOW_REGISTRATION=true` to reopen). Social tokens are encrypted in D1.
+- Access is restricted to the authorized email. Social tokens are encrypted in D1.
 - Deployment-provider actions, YouTube, settings persistence and global search are not connected.
 - Cloudflare Workers, D1, R2 and Cron Triggers are configured for the current product flow. Queues remain future work.
 - Prototype metrics and campaign content are illustrative and must not be represented as live account data.
@@ -70,7 +70,7 @@ The user-provided content-studio reference image is the visual reference. No rea
 - Ajustes: connections, permissions and preferences.
 
 ## Roadmap
-1. Apply migrations `0002` through `0007` to each D1 environment (`bun run deploy` applies them remotely) and set the TikTok and token-encryption secrets.
+1. Apply migrations `0002_content_workflow.sql` through `0008_tiktok.sql` to each D1 environment (`bun run deploy` applies remote migrations before publishing) and set the TikTok and token-encryption secrets.
 2. Try the TikTok connector and the OAuth connector flow with real accounts and clients, and fix what only real services reveal.
 3. Add YouTube, then deployment-provider connections and saved workspace preferences. Consider TikTok Direct Post once the app is audited.
 

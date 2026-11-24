@@ -1,17 +1,25 @@
+import { ALLOWED_ACCOUNT_EMAIL } from "../lib/auth-policy";
 import { newId } from "../lib/db";
 import { randomSecret, sha256Hex } from "../lib/instagram";
 
-export async function seedUser(db: D1Database, email = "pablo@example.test") {
+export async function seedUser(db: D1Database, email = ALLOWED_ACCOUNT_EMAIL) {
   const id = newId();
   await db.prepare("INSERT INTO users (id, email, password_hash) VALUES (?, ?, 'x:x')").bind(id, email).run();
   return id;
 }
 
-/** Crea una clave MCP y devuelve el valor en claro, como lo vería el harness. */
-export async function seedMcpToken(db: D1Database, userId: string, label = "Hermes", scopes?: string) {
-  const token = "nex_live_" + randomSecret();
-  await db.prepare("INSERT INTO mcp_tokens (id, user_id, token_hash, label, scopes) VALUES (?, ?, ?, ?, COALESCE(?, 'content:read content:write publish'))")
-    .bind(newId(), userId, await sha256Hex(token), label, scopes ?? null)
+/**
+ * Crea una conexión OAuth ya autorizada (cliente, concesión y token de acceso vigente) y devuelve el token en claro,
+ * como lo enviaría un asistente. El recurso es `<origin>/api/mcp`, igual que en una autorización real.
+ */
+export async function seedOAuthAccess(db: D1Database, userId: string, scopes = "nex:read nex:write nex:publish", origin = "https://nex.test") {
+  const token = "nex_access_" + randomSecret();
+  const clientId = "cliente-" + newId();
+  await db.prepare("INSERT INTO mcp_oauth_clients (client_id, client_name, redirect_uris_json, grant_types_json, response_types_json, scopes) VALUES (?, 'Cliente de prueba', '[]', '[\"authorization_code\"]', '[\"code\"]', ?)")
+    .bind(clientId, scopes)
+    .run();
+  await db.prepare("INSERT INTO mcp_oauth_grants (id, user_id, client_id, client_name, resource, scopes, access_token_hash, refresh_token_hash, access_expires_at, refresh_expires_at) VALUES (?, ?, ?, 'Cliente de prueba', ?, ?, ?, ?, ?, ?)")
+    .bind(newId(), userId, clientId, origin + "/api/mcp", scopes, await sha256Hex(token), await sha256Hex("refresh-" + token), new Date(Date.now() + 3_600_000).toISOString(), new Date(Date.now() + 30 * 86_400_000).toISOString())
     .run();
   return token;
 }

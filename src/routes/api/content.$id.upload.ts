@@ -34,7 +34,7 @@ export const Route = createFileRoute("/api/content/$id/upload")({
       POST: async ({ request, params }) => {
         const auth = await getRequestAuth(request);
         if (!auth) return jsonError("Inicia sesión o usa una clave MCP válida para subir archivos.", 401);
-        if (!hasScope(auth, "content:write")) return jsonError("Esta clave MCP no tiene el permiso content:write para subir archivos.", 403);
+        if (!hasScope(auth, "nex:write")) return jsonError("Esta conexión MCP no tiene el permiso nex:write para subir archivos.", 403);
         const userId = auth.userId;
 
         const db = getDb();
@@ -161,7 +161,7 @@ export const Route = createFileRoute("/api/content/$id/upload")({
       PUT: async ({ request, params }) => {
         const auth = await getRequestAuth(request);
         if (!auth) return jsonError("Inicia sesión o usa una clave MCP válida para subir archivos.", 401);
-        if (!hasScope(auth, "content:write")) return jsonError("Esta clave MCP no tiene el permiso content:write para subir archivos.", 403);
+        if (!hasScope(auth, "nex:write")) return jsonError("Esta conexión MCP no tiene el permiso nex:write para subir archivos.", 403);
         const userId = auth.userId;
 
         const url = new URL(request.url);

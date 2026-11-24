@@ -6,7 +6,7 @@ import { encryptInstagramToken } from "./lib/instagram";
 import { schedulePublications } from "./lib/publications";
 import { Route as InstagramDisconnectRoute } from "./routes/api.social.instagram.disconnect";
 import { Route as UploadRoute } from "./routes/api/content.$id.upload";
-import { approvedVideo, bearer, seedContent, seedMcpToken, seedSocialAccount, seedUser } from "./test-utils/fixtures";
+import { approvedVideo, bearer, seedContent, seedOAuthAccess, seedSocialAccount, seedUser } from "./test-utils/fixtures";
 import { createFakeBucket, createTestDatabase } from "./test-utils/worker-env";
 
 const session = vi.hoisted(() => ({ token: null as string | null }));
@@ -61,9 +61,9 @@ describe("quién hace una petición con Authorization y cookie a la vez", () => 
     params: { id: contentId },
   });
 
-  it("una clave de solo lectura no gana permisos por el hecho de que el navegador envíe la cookie", async () => {
+  it("un token de solo lectura no gana permisos por el hecho de que el navegador envíe la cookie", async () => {
     const contentId = await seedContent(testDb.db, userId);
-    const readOnly = await seedMcpToken(testDb.db, userId, "Solo lectura", "content:read");
+    const readOnly = await seedOAuthAccess(testDb.db, userId, "nex:read");
     expect((await start(contentId, bearer(readOnly))).status).toBe(403);
   });
 
@@ -72,8 +72,8 @@ describe("quién hace una petición con Authorization y cookie a la vez", () => 
     expect((await start(contentId, {})).status).toBe(200);
   });
 
-  it("una clave inválida no se rescata con la cookie de sesión", async () => {
+  it("un token inválido no se rescata con la cookie de sesión", async () => {
     const contentId = await seedContent(testDb.db, userId);
-    expect((await start(contentId, bearer("nex_live_" + "a".repeat(43)))).status).toBe(401);
+    expect((await start(contentId, bearer("nex_access_" + "a".repeat(43)))).status).toBe(401);
   });
 });

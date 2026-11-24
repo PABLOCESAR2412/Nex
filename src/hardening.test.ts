@@ -2,7 +2,6 @@
 /// <reference types="vitest/globals" />
 import { env } from "cloudflare:workers";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { createUserAccount } from "./lib/auth";
 import { graphUrl, instagramConfig, isInstagramConfigured, decryptInstagramToken, encryptInstagramToken } from "./lib/instagram";
 import { isHourlyTick, refreshInstagramTokens } from "./lib/instagram-refresh";
 import { seedSocialAccount, seedUser } from "./test-utils/fixtures";
@@ -19,7 +18,6 @@ beforeEach(async () => {
   Object.assign(env as object, {
     nex_db: testDb.db,
     nex_assets: createFakeBucket().bucket,
-    ALLOW_REGISTRATION: undefined,
     INSTAGRAM_APP_ID: "app-id",
     INSTAGRAM_APP_SECRET: "app-secret",
     INSTAGRAM_TOKEN_ENCRYPTION_KEY: "i".repeat(32),
@@ -30,41 +28,6 @@ beforeEach(async () => {
   await testDb.db.prepare("DELETE FROM users").run();
 });
 afterEach(() => vi.unstubAllGlobals());
-
-describe("registro cerrado", () => {
-  const account = (email: string) => createUserAccount({ email, password: "una-clave-larga", name: "Pablo" });
-  const userCount = async () => (await testDb.db.prepare("SELECT COUNT(*) AS total FROM users").first<{ total: number }>())?.total;
-
-  it("el primer usuario puede registrarse y queda con sesión", async () => {
-    const owner = await account("dueno@example.test");
-    expect(owner.token).toBeTruthy();
-    const session = await testDb.db.prepare("SELECT user_id FROM sessions WHERE id = ?").bind(owner.token).first<{ user_id: string }>();
-    expect(session?.user_id).toBe(owner.userId);
-    expect(await userCount()).toBe(1);
-  });
-
-  it("después del propietario, el registro se rechaza sin crear nada", async () => {
-    await account("dueno@example.test");
-    await expect(account("intruso@example.test")).rejects.toThrow(/registro está cerrado/);
-    // Tampoco revela si un correo ya existe.
-    await expect(account("dueno@example.test")).rejects.toThrow(/registro está cerrado/);
-    expect(await userCount()).toBe(1);
-  });
-
-  it("dos registros simultáneos con la base vacía crean un solo usuario", async () => {
-    const results = await Promise.allSettled([account("a@example.test"), account("b@example.test")]);
-    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
-    expect(await userCount()).toBe(1);
-  });
-
-  it("ALLOW_REGISTRATION=true lo reabre, y un correo repetido sigue fallando", async () => {
-    await account("dueno@example.test");
-    Object.assign(env as object, { ALLOW_REGISTRATION: "true" });
-    await expect(account("otra@example.test")).resolves.toMatchObject({ userId: expect.any(String) });
-    await expect(account("otra@example.test")).rejects.toThrow(/ya tiene una cuenta/);
-    expect(await userCount()).toBe(2);
-  });
-});
 
 describe("configuración de Instagram", () => {
   it("funciona sin PUBLIC_APP_URL: las llamadas a Graph ya no fallan con «Invalid URL»", () => {

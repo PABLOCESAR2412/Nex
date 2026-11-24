@@ -446,7 +446,8 @@ describe("desconectar una cuenta de TikTok", () => {
     const stranger = await seedUser(testDb.db, "otra@example.test");
     await testDb.db.prepare("INSERT INTO sessions (id, user_id, expires_at) VALUES ('sess-other', ?, ?)").bind(stranger, inOneHour()).run();
     session.token = "sess-other";
-    expect((await disconnect(account)).status).toBe(404);
+    // Quien no es el correo autorizado ni siquiera tiene una sesión válida.
+    expect((await disconnect(account)).status).toBe(401);
     expect((await testDb.db.prepare("SELECT status FROM social_accounts WHERE id = ?").bind(account).first<{ status: string }>())?.status).toBe("conectada");
   });
 });

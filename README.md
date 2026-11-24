@@ -69,14 +69,14 @@ Nex es un centro en la nube para preparar, revisar y programar contenido, ademá
 5. Eliges las cuentas y la hora: Nex publica en Instagram o deja el borrador en la bandeja de TikTok y muestra el estado de cada publicación.
 
 ### Qué hace cada parte
-- **Harness:** crear y editar contenido mediante agentes y skills; conectarse a Nex por MCP.
-- **Nex:** organizar piezas, guiones, archivos, estados de revisión y fechas en el calendario, y publicar por cuenta. El endpoint MCP permite listar, crear, subir archivos, programar y cancelar publicaciones según los permisos de cada clave.
+- **Asistentes:** crear borradores, cargar videos, consultar contenido y cuentas, programar y cancelar publicaciones y publicar mediante MCP con autorización OAuth.
+- **Nex:** organizar piezas, guiones, archivos, estados de revisión y fechas en el calendario, y publicar por cuenta. El endpoint MCP trabaja con la sesión autenticada y los permisos que aceptaste.
 - **Instagram:** conectar cuentas profesionales con Instagram Login y publicar Reels de piezas aprobadas.
 - **TikTok:** conectar una cuenta y subir el video a su bandeja como borrador; la persona lo revisa y lo publica desde la app de TikTok.
 - **Cloudflare:** alojar la aplicación y su API en Workers, guardar información en D1, almacenar videos y archivos en R2, y ejecutar tareas programadas.
 - **GitHub, Cloudflare y Vercel:** conectar repositorios y gestionar despliegues desde Nex.
 
-El render de video se ejecuta en el equipo donde corre el harness (Workers no es adecuado para renderizar videos pesados con HyperFrames y FFmpeg). Luego el resultado se sube a R2.
+El render de video se ejecuta en el equipo donde corre el harness (Workers no es adecuado para renderizar videos pesados con HyperFrames y FFmpeg). El harness puede transferir el video a R2 mediante las herramientas MCP multipart, sin que Nex descargue URLs de terceros.
 
 ## Organización
 
@@ -88,8 +88,9 @@ src/
     studio-pages.tsx        # calendario, biblioteca y cuentas (Instagram y TikTok)
     publications-panel.tsx  # programar, seguir y cancelar publicaciones por cuenta
   lib/
-    mcp.ts                  # claves MCP y sus permisos
-    oauth.ts                # OAuth 2.1 para conectores (registro, código + PKCE, tokens)
+    mcp-server.ts           # herramientas MCP
+    mcp-http.ts, mcp-oauth*.ts  # transporte MCP y OAuth 2.1 (registro, código + PKCE, tokens)
+    mcp.ts                  # identifica peticiones HTTP: token OAuth o sesión
     publications.ts         # publicaciones por cuenta y ciclo del cron
     instagram*.ts           # OAuth, publicación y renovación de tokens de Instagram
     tiktok.ts               # OAuth, subida por trozos y estado de TikTok
@@ -97,7 +98,7 @@ src/
   routes/
     __root.tsx, index.tsx, calendario.tsx, biblioteca.tsx, cuentas.tsx, despliegues.tsx, ajustes.tsx
     api/
-      mcp.ts                # herramientas MCP
+      mcp.ts                # endpoint MCP
       content.*.ts          # carga multipart y acceso autenticado a R2
     api.social.*.ts         # OAuth, cuentas y publicación de Instagram y TikTok
     oauth.*.ts              # registro, autorización y token de OAuth
@@ -105,52 +106,39 @@ src/
   server.ts                 # entrada del Worker: fetch y Cron Trigger
   router.tsx                # configuración de TanStack Router
   styles.css                # Tailwind y tokens visuales conservados
-public/nex-upload.mjs       # script para subir archivos locales con una clave MCP
 public/assets/              # marca e ilustración SVG
 wrangler.jsonc              # entrada del Worker, bindings y cron
-migrations/                 # esquema: contenido, Instagram, MCP, publicaciones, TikTok, OAuth
+migrations/                 # esquema: contenido, Instagram, MCP y OAuth, publicaciones, TikTok
 DESIGN.md                   # sistema visual y reglas para futuras vistas
 PRODUCT.md                  # alcance del producto y límites de esta fase
 ```
 
 ## Acceso y seguridad
 
-- **Registro cerrado:** solo se puede crear el primer usuario (el propietario). Después, el registro se rechaza. Para abrirlo otra vez, define `ALLOW_REGISTRATION=true`.
+- **Acceso restringido:** solo el correo autorizado puede crear cuenta e iniciar sesión.
 - **Tokens de redes sociales:** se cifran antes de guardarse en D1 con `TOKEN_ENCRYPTION_KEY` (o `INSTAGRAM_TOKEN_ENCRYPTION_KEY`, que tiene prioridad si existe). Si cambias esa clave, hay que volver a conectar las cuentas.
 - **Aprobación:** solo se publican piezas que tú aprobaste; un agente no puede saltarse ese paso.
 
-## Conectar un agente por MCP
+## Conectar asistentes por MCP
 
-El servidor MCP está en `https://<dominio-publico>/api/mcp` (JSON-RPC sobre POST). Hay dos formas de autenticarse:
+El endpoint remoto es <code>https://&lt;dominio-publico-de-nex&gt;/api/mcp</code>. El servidor implementa MCP sobre HTTP, OAuth 2.1 con PKCE, registro dinámico de clientes, autorización por permisos y renovación/revocación de tokens. Los tokens se guardan como hashes en D1 y cada cliente muestra una pantalla de consentimiento al usuario. Los refresh tokens renuevan su vigencia por 30 días cada vez que se usan.
 
-1. **Clave Bearer:** en Nex, abre el diálogo de conexión, elige los permisos y crea la clave (`nex_live_…`, se muestra una sola vez). El cliente la envía como `Authorization: Bearer <clave>`. Se puede revocar desde el mismo diálogo.
-2. **OAuth 2.1 (conectores):** los clientes que inician sesión por su cuenta descubren Nex por `/.well-known/oauth-protected-resource`, se registran en `/oauth/register`, y la persona aprueba el acceso en una pantalla de consentimiento (con PKCE S256). Las claves emitidas duran una hora y se renuevan con un refresh token rotativo; aparecen en el mismo diálogo y se revocan igual. Esta parte sigue el estándar y está probada con pruebas y en workerd, pero **no se ha probado con claude.ai ni con ChatGPT reales**: pueden aparecer diferencias propias de cada cliente.
+- **Hermes:** en la cabecera de Nex, pulsa **Conectar MCP** y luego **Añadir Nex a Hermes**. Hermes abre Nex para iniciar sesión y autorizar los permisos.
+- **ChatGPT:** abre ChatGPT web, entra en **Ajustes → Apps o Plugins → Añadir servidor MCP personalizado**, pega la dirección MCP que Nex muestra en el mismo cuadro y elige OAuth. La primera autorización enlaza la cuenta Nex.
+- **Permisos:** `nex:read` consulta piezas, cuentas conectadas y publicaciones; `nex:write` crea borradores, carga videos y coloca piezas en el calendario; `nex:publish` programa publicaciones en cuentas, las cancela, publica Reels confirmados y consulta su estado. `schedule_content` con `account_ids` exige `nex:publish`.
+- **Videos:** Hermes usa `start_video_upload`, `upload_video_part` y `complete_video_upload` para enviar MP4/MOV en partes de 8 MiB directamente a R2; tamaño máximo 1 GiB. No se descargan URLs arbitrarias. Si una carga se interrumpe, puede cancelarse con `abort_video_upload`.
+- **Publicaciones:** `list_social_accounts` devuelve las cuentas de Instagram y TikTok; `schedule_content` con `account_ids` crea una publicación por cuenta; `list_publications` muestra su estado y `cancel_publication` cancela las que aún no empezaron.
+- **Perfiles:** `get_profile` devuelve un identificador estable para que ChatGPT reconozca la cuenta Nex conectada.
 
-Permisos de una clave:
+ChatGPT habilita las conexiones MCP personalizadas desde web; las acciones de escritura requieren Business, Enterprise o Edu. Pro permite herramientas de lectura. Consulta los [requisitos actuales de ChatGPT](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt) antes de configurar la conexión.
 
-| Permiso | Permite |
-| --- | --- |
-| `content:read` | Listar piezas, cuentas conectadas y publicaciones. |
-| `content:write` | Crear piezas, subir archivos y colocarlas en el calendario. |
-| `publish` | Programar publicaciones en cuentas, cancelarlas y publicar Reels. |
-
-Las claves creadas antes de que existieran los permisos conservan los tres. `tools/list` solo muestra lo que la clave puede usar.
-
-Herramientas principales: `list_content`, `create_content`, `upload_content_from_url`, `schedule_content` (con `account_ids` programa en cuentas), `list_social_accounts`, `list_publications`, `cancel_publication`, `publish_instagram_reel` y `check_instagram_publish`.
-
-**Subir un archivo local.** Un agente en otra máquina puede subir un video con el script sin dependencias que Nex sirve en `/nex-upload.mjs` (Node 18 o superior):
-
-```sh
-NEX_URL=https://<dominio-publico> NEX_TOKEN=nex_live_... node nex-upload.mjs <content_id> <archivo>
-```
-
-Sube el archivo por partes con reintentos y imprime un JSON con el resultado. Si el video ya está en una URL pública, `upload_content_from_url` lo copia sin pasar por el agente (HTTPS directo, con `Content-Length`, hasta 1 GB).
+El despliegue configurado usa `bun run deploy`, que aplica las migraciones D1 remotas antes de publicar el Worker. La migración OAuth `0005_mcp_oauth.sql` también revoca los tokens Bearer antiguos para que las nuevas conexiones usen OAuth.
 
 ## Publicación programada
 
-Una publicación es una fila por pieza y cuenta (`programada`, `en_curso`, `publicada`, `borrador_enviado`, `fallida`, `requiere_revision` o `cancelada`). En Biblioteca, o con `schedule_content` y `account_ids`, eliges las cuentas y la hora; solo se pueden programar piezas aprobadas.
+Una publicación es una fila por pieza y cuenta (`programada`, `en_curso`, `publicada`, `borrador_enviado`, `fallida`, `requiere_revision` o `cancelada`). En Biblioteca, o con `schedule_content` y `account_ids`, eliges las cuentas y la hora; solo se pueden programar piezas aprobadas con un video MP4 o MOV de hasta 1 GB. La API de Instagram está orientada a cuentas profesionales Business o Creator; consulta la [documentación de Instagram de Meta](https://developers.facebook.com/docs/instagram-platform/instagram-api-with-instagram-login/).
 
-Un Cron Trigger (`wrangler.jsonc`, cada minuto, disponible en el plan gratuito de Workers) lanza las publicaciones vencidas, consulta las que están en curso y, a la hora en punto, renueva los tokens de Instagram que vencen en menos de 14 días. Cada publicación se reclama con una actualización condicional para no publicarse dos veces. Si una publicación queda más de dos horas sin resolverse pasa a `requiere_revision`: revisa la red social antes de reintentar.
+Un Cron Trigger (`wrangler.jsonc`, cada minuto) lanza las publicaciones vencidas, consulta las que están en curso y, a la hora en punto, renueva los tokens de Instagram que vencen en menos de 14 días. Cada publicación se reclama con una actualización condicional para no publicarse dos veces. Si una publicación queda más de dos horas sin resolverse pasa a `requiere_revision`: revisa la red social antes de reintentar.
 
 Para publicar en Instagram a la hora programada, `PUBLIC_APP_URL` es obligatorio: Meta descarga el video desde una URL temporal de Nex.
 

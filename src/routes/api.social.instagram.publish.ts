@@ -12,7 +12,7 @@ export const Route = createFileRoute("/api/social/instagram/publish")({
       POST: async ({ request }) => {
         const auth = await getRequestAuth(request);
         if (!auth) return fail("Conecta una sesión o una clave MCP válida para publicar.", 401);
-        if (!hasScope(auth, "publish")) return fail("Esta clave MCP no tiene el permiso publish.", 403);
+        if (!hasScope(auth, "nex:publish")) return fail("Esta conexión MCP no tiene el permiso nex:publish.", 403);
         return handleInstagramPublishRequest(request, auth.userId);
       },
     },
