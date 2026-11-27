@@ -119,6 +119,14 @@ El endpoint remoto es <code>https://&lt;dominio-publico-de-nex&gt;/api/mcp</code
 4. Usa `list_social_accounts` para identificar la cuenta y plataforma elegidas. Tras la aprobación del usuario, llama a `approve_video_content` con `confirm_approve: true`. Para enviar el video a esa cuenta llama a `publish_social_video` con `confirm_publish: true`, después de que el usuario confirme el destino.
 5. Usa `check_social_publish` con `platform` y el `job_id` recibido. En Instagram la consulta finaliza la publicación al quedar listo el Reel. En TikTok, `awaiting_user` indica que el usuario debe abrir la notificación en TikTok, añadir el texto que devuelve Nex y completar la publicación.
 
+#### Adjuntar un archivo local sin base64
+
+Desde una terminal en el equipo que tiene el video, abre el repositorio de Nex y usa Node.js 22 o posterior:
+
+1. `node scripts/nex-upload.mjs info "ruta/al/video.mp4"` devuelve el nombre, tipo MIME y tamaño para `start_video_upload`.
+2. Pasa la respuesta JSON de `start_video_upload` por la entrada estándar de `node scripts/nex-upload.mjs put "ruta/al/video.mp4"`. El comando lee el archivo por partes, usa HTTPS y devuelve `upload_id` y `parts`. Usa esos campos junto con `content_id` en `complete_video_upload`. Para otro entorno, establece `NEX_MCP_URL` con su endpoint HTTPS exacto.
+3. Si el agente solo tiene herramientas MCP y no puede leer el disco local, abre **Biblioteca** y usa **Adjuntar archivo** en la pieza correspondiente. El título y la descripción se pueden guardar desde MCP o desde Nex.
+
 ChatGPT habilita las conexiones MCP personalizadas desde web; las acciones de escritura requieren Business, Enterprise o Edu. Pro permite herramientas de lectura. Consulta los [requisitos actuales de ChatGPT](https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt) antes de configurar la conexión.
 
 El despliegue configurado usa `bun run deploy`, que aplica las migraciones D1 remotas antes de publicar el Worker. La migración OAuth `0005_mcp_oauth.sql` también revoca los tokens Bearer antiguos para que las nuevas conexiones usen OAuth.

@@ -192,7 +192,7 @@ export function createNexMcpServer(context: NexMcpContext) {
 
   server.registerTool("start_video_upload", {
     title: "Start video upload",
-    description: "Inicia la carga por partes de un MP4 o MOV. Desde el equipo que tiene el archivo, envía cada parte binaria por HTTP PUT a upload_url con ?part_number=N, Authorization: Bearer <upload_token> y su Content-Length. Guarda los etags y termina con complete_video_upload. El token dura una hora y sirve solo para esta carga. Si tu cliente ya automatiza base64, también puedes usar upload_video_part.",
+    description: "Inicia la carga por partes de un MP4 o MOV. Si tienes el archivo en el equipo que ejecuta tu terminal, usa node scripts/nex-upload.mjs put RUTA (desde el repo de Nex) con el JSON de este resultado por stdin. También puedes enviar cada parte binaria por HTTP PUT a upload_url con ?part_number=N, Authorization: Bearer <upload_token> y su Content-Length. Termina con complete_video_upload. El token dura una hora y sirve solo para esta carga. Base64 es opcional.",
     inputSchema: z.object({
       content_id: z.string().min(1),
       filename: z.string().trim().min(1).max(200),
@@ -258,7 +258,7 @@ export function createNexMcpServer(context: NexMcpContext) {
 
   server.registerTool("complete_video_upload", {
     title: "Complete video upload",
-    description: "Completa la carga con todos los part_number y etag devueltos por upload_video_part. El video queda adjunto a la pieza en Nex.",
+    description: "Completa la carga con todos los part_number y etag devueltos por PUT binario o upload_video_part, en orden. El video queda adjunto a la pieza en Nex.",
     inputSchema: z.object({
       content_id: z.string().min(1),
       upload_id: z.string().min(1),
