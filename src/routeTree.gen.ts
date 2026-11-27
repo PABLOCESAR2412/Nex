@@ -26,6 +26,9 @@ import { Route as OauthTokenRouteImport } from './routes/oauth.token'
 import { Route as DotwellKnownOauthProtectedResourceApiMcpRouteImport } from './routes/[.]well-known.oauth-protected-resource.api.mcp'
 import { Route as ApiContentIdAssetRouteImport } from './routes/api/content.$id.asset'
 import { Route as ApiContentIdUploadRouteImport } from './routes/api/content.$id.upload'
+import { Route as ApiSocialBufferDisconnectRouteImport } from './routes/api.social.buffer.disconnect'
+import { Route as ApiSocialBufferPublishRouteImport } from './routes/api.social.buffer.publish'
+import { Route as ApiSocialBufferSyncRouteImport } from './routes/api.social.buffer.sync'
 import { Route as ApiSocialInstagramCallbackRouteImport } from './routes/api.social.instagram.callback'
 import { Route as ApiSocialInstagramConnectRouteImport } from './routes/api.social.instagram.connect'
 import { Route as ApiSocialInstagramDisconnectRouteImport } from './routes/api.social.instagram.disconnect'
@@ -34,6 +37,7 @@ import { Route as ApiSocialTiktokCallbackRouteImport } from './routes/api.social
 import { Route as ApiSocialTiktokConnectRouteImport } from './routes/api.social.tiktok.connect'
 import { Route as ApiSocialTiktokDisconnectRouteImport } from './routes/api.social.tiktok.disconnect'
 import { Route as ApiSocialTiktokUploadRouteImport } from './routes/api.social.tiktok.upload'
+import { Route as ApiSocialBufferMediaTokenRouteImport } from './routes/api.social.buffer.media.$token'
 import { Route as ApiSocialInstagramMediaTokenRouteImport } from './routes/api.social.instagram.media.$token'
 import { Route as ApiSocialTiktokMediaTokenRouteImport } from './routes/api.social.tiktok.media.$token'
 
@@ -124,6 +128,22 @@ const ApiContentIdUploadRoute = ApiContentIdUploadRouteImport.update({
   path: '/api/content/$id/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSocialBufferDisconnectRoute =
+  ApiSocialBufferDisconnectRouteImport.update({
+    id: '/api/social/buffer/disconnect',
+    path: '/api/social/buffer/disconnect',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiSocialBufferPublishRoute = ApiSocialBufferPublishRouteImport.update({
+  id: '/api/social/buffer/publish',
+  path: '/api/social/buffer/publish',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiSocialBufferSyncRoute = ApiSocialBufferSyncRouteImport.update({
+  id: '/api/social/buffer/sync',
+  path: '/api/social/buffer/sync',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSocialInstagramCallbackRoute =
   ApiSocialInstagramCallbackRouteImport.update({
     id: '/api/social/instagram/callback',
@@ -169,6 +189,12 @@ const ApiSocialTiktokUploadRoute = ApiSocialTiktokUploadRouteImport.update({
   path: '/api/social/tiktok/upload',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiSocialBufferMediaTokenRoute =
+  ApiSocialBufferMediaTokenRouteImport.update({
+    id: '/api/social/buffer/media/$token',
+    path: '/api/social/buffer/media/$token',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiSocialInstagramMediaTokenRoute =
   ApiSocialInstagramMediaTokenRouteImport.update({
     id: '/api/social/instagram/media/$token',
@@ -200,6 +226,9 @@ export interface FileRoutesByFullPath {
   '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
   '/api/content/$id/asset': typeof ApiContentIdAssetRoute
   '/api/content/$id/upload': typeof ApiContentIdUploadRoute
+  '/api/social/buffer/disconnect': typeof ApiSocialBufferDisconnectRoute
+  '/api/social/buffer/publish': typeof ApiSocialBufferPublishRoute
+  '/api/social/buffer/sync': typeof ApiSocialBufferSyncRoute
   '/api/social/instagram/callback': typeof ApiSocialInstagramCallbackRoute
   '/api/social/instagram/connect': typeof ApiSocialInstagramConnectRoute
   '/api/social/instagram/disconnect': typeof ApiSocialInstagramDisconnectRoute
@@ -208,6 +237,7 @@ export interface FileRoutesByFullPath {
   '/api/social/tiktok/connect': typeof ApiSocialTiktokConnectRoute
   '/api/social/tiktok/disconnect': typeof ApiSocialTiktokDisconnectRoute
   '/api/social/tiktok/upload': typeof ApiSocialTiktokUploadRoute
+  '/api/social/buffer/media/$token': typeof ApiSocialBufferMediaTokenRoute
   '/api/social/instagram/media/$token': typeof ApiSocialInstagramMediaTokenRoute
   '/api/social/tiktok/media/$token': typeof ApiSocialTiktokMediaTokenRoute
 }
@@ -229,6 +259,9 @@ export interface FileRoutesByTo {
   '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
   '/api/content/$id/asset': typeof ApiContentIdAssetRoute
   '/api/content/$id/upload': typeof ApiContentIdUploadRoute
+  '/api/social/buffer/disconnect': typeof ApiSocialBufferDisconnectRoute
+  '/api/social/buffer/publish': typeof ApiSocialBufferPublishRoute
+  '/api/social/buffer/sync': typeof ApiSocialBufferSyncRoute
   '/api/social/instagram/callback': typeof ApiSocialInstagramCallbackRoute
   '/api/social/instagram/connect': typeof ApiSocialInstagramConnectRoute
   '/api/social/instagram/disconnect': typeof ApiSocialInstagramDisconnectRoute
@@ -237,6 +270,7 @@ export interface FileRoutesByTo {
   '/api/social/tiktok/connect': typeof ApiSocialTiktokConnectRoute
   '/api/social/tiktok/disconnect': typeof ApiSocialTiktokDisconnectRoute
   '/api/social/tiktok/upload': typeof ApiSocialTiktokUploadRoute
+  '/api/social/buffer/media/$token': typeof ApiSocialBufferMediaTokenRoute
   '/api/social/instagram/media/$token': typeof ApiSocialInstagramMediaTokenRoute
   '/api/social/tiktok/media/$token': typeof ApiSocialTiktokMediaTokenRoute
 }
@@ -259,6 +293,9 @@ export interface FileRoutesById {
   '/.well-known/oauth-protected-resource/api/mcp': typeof DotwellKnownOauthProtectedResourceApiMcpRoute
   '/api/content/$id/asset': typeof ApiContentIdAssetRoute
   '/api/content/$id/upload': typeof ApiContentIdUploadRoute
+  '/api/social/buffer/disconnect': typeof ApiSocialBufferDisconnectRoute
+  '/api/social/buffer/publish': typeof ApiSocialBufferPublishRoute
+  '/api/social/buffer/sync': typeof ApiSocialBufferSyncRoute
   '/api/social/instagram/callback': typeof ApiSocialInstagramCallbackRoute
   '/api/social/instagram/connect': typeof ApiSocialInstagramConnectRoute
   '/api/social/instagram/disconnect': typeof ApiSocialInstagramDisconnectRoute
@@ -267,6 +304,7 @@ export interface FileRoutesById {
   '/api/social/tiktok/connect': typeof ApiSocialTiktokConnectRoute
   '/api/social/tiktok/disconnect': typeof ApiSocialTiktokDisconnectRoute
   '/api/social/tiktok/upload': typeof ApiSocialTiktokUploadRoute
+  '/api/social/buffer/media/$token': typeof ApiSocialBufferMediaTokenRoute
   '/api/social/instagram/media/$token': typeof ApiSocialInstagramMediaTokenRoute
   '/api/social/tiktok/media/$token': typeof ApiSocialTiktokMediaTokenRoute
 }
@@ -290,6 +328,9 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource/api/mcp'
     | '/api/content/$id/asset'
     | '/api/content/$id/upload'
+    | '/api/social/buffer/disconnect'
+    | '/api/social/buffer/publish'
+    | '/api/social/buffer/sync'
     | '/api/social/instagram/callback'
     | '/api/social/instagram/connect'
     | '/api/social/instagram/disconnect'
@@ -298,6 +339,7 @@ export interface FileRouteTypes {
     | '/api/social/tiktok/connect'
     | '/api/social/tiktok/disconnect'
     | '/api/social/tiktok/upload'
+    | '/api/social/buffer/media/$token'
     | '/api/social/instagram/media/$token'
     | '/api/social/tiktok/media/$token'
   fileRoutesByTo: FileRoutesByTo
@@ -319,6 +361,9 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource/api/mcp'
     | '/api/content/$id/asset'
     | '/api/content/$id/upload'
+    | '/api/social/buffer/disconnect'
+    | '/api/social/buffer/publish'
+    | '/api/social/buffer/sync'
     | '/api/social/instagram/callback'
     | '/api/social/instagram/connect'
     | '/api/social/instagram/disconnect'
@@ -327,6 +372,7 @@ export interface FileRouteTypes {
     | '/api/social/tiktok/connect'
     | '/api/social/tiktok/disconnect'
     | '/api/social/tiktok/upload'
+    | '/api/social/buffer/media/$token'
     | '/api/social/instagram/media/$token'
     | '/api/social/tiktok/media/$token'
   id:
@@ -348,6 +394,9 @@ export interface FileRouteTypes {
     | '/.well-known/oauth-protected-resource/api/mcp'
     | '/api/content/$id/asset'
     | '/api/content/$id/upload'
+    | '/api/social/buffer/disconnect'
+    | '/api/social/buffer/publish'
+    | '/api/social/buffer/sync'
     | '/api/social/instagram/callback'
     | '/api/social/instagram/connect'
     | '/api/social/instagram/disconnect'
@@ -356,6 +405,7 @@ export interface FileRouteTypes {
     | '/api/social/tiktok/connect'
     | '/api/social/tiktok/disconnect'
     | '/api/social/tiktok/upload'
+    | '/api/social/buffer/media/$token'
     | '/api/social/instagram/media/$token'
     | '/api/social/tiktok/media/$token'
   fileRoutesById: FileRoutesById
@@ -378,6 +428,9 @@ export interface RootRouteChildren {
   DotwellKnownOauthProtectedResourceApiMcpRoute: typeof DotwellKnownOauthProtectedResourceApiMcpRoute
   ApiContentIdAssetRoute: typeof ApiContentIdAssetRoute
   ApiContentIdUploadRoute: typeof ApiContentIdUploadRoute
+  ApiSocialBufferDisconnectRoute: typeof ApiSocialBufferDisconnectRoute
+  ApiSocialBufferPublishRoute: typeof ApiSocialBufferPublishRoute
+  ApiSocialBufferSyncRoute: typeof ApiSocialBufferSyncRoute
   ApiSocialInstagramCallbackRoute: typeof ApiSocialInstagramCallbackRoute
   ApiSocialInstagramConnectRoute: typeof ApiSocialInstagramConnectRoute
   ApiSocialInstagramDisconnectRoute: typeof ApiSocialInstagramDisconnectRoute
@@ -386,6 +439,7 @@ export interface RootRouteChildren {
   ApiSocialTiktokConnectRoute: typeof ApiSocialTiktokConnectRoute
   ApiSocialTiktokDisconnectRoute: typeof ApiSocialTiktokDisconnectRoute
   ApiSocialTiktokUploadRoute: typeof ApiSocialTiktokUploadRoute
+  ApiSocialBufferMediaTokenRoute: typeof ApiSocialBufferMediaTokenRoute
   ApiSocialInstagramMediaTokenRoute: typeof ApiSocialInstagramMediaTokenRoute
   ApiSocialTiktokMediaTokenRoute: typeof ApiSocialTiktokMediaTokenRoute
 }
@@ -511,6 +565,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiContentIdUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/social/buffer/disconnect': {
+      id: '/api/social/buffer/disconnect'
+      path: '/api/social/buffer/disconnect'
+      fullPath: '/api/social/buffer/disconnect'
+      preLoaderRoute: typeof ApiSocialBufferDisconnectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/social/buffer/publish': {
+      id: '/api/social/buffer/publish'
+      path: '/api/social/buffer/publish'
+      fullPath: '/api/social/buffer/publish'
+      preLoaderRoute: typeof ApiSocialBufferPublishRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/social/buffer/sync': {
+      id: '/api/social/buffer/sync'
+      path: '/api/social/buffer/sync'
+      fullPath: '/api/social/buffer/sync'
+      preLoaderRoute: typeof ApiSocialBufferSyncRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/social/instagram/callback': {
       id: '/api/social/instagram/callback'
       path: '/api/social/instagram/callback'
@@ -567,6 +642,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSocialTiktokUploadRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/social/buffer/media/$token': {
+      id: '/api/social/buffer/media/$token'
+      path: '/api/social/buffer/media/$token'
+      fullPath: '/api/social/buffer/media/$token'
+      preLoaderRoute: typeof ApiSocialBufferMediaTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/social/instagram/media/$token': {
       id: '/api/social/instagram/media/$token'
       path: '/api/social/instagram/media/$token'
@@ -604,6 +686,9 @@ const rootRouteChildren: RootRouteChildren = {
     DotwellKnownOauthProtectedResourceApiMcpRoute,
   ApiContentIdAssetRoute: ApiContentIdAssetRoute,
   ApiContentIdUploadRoute: ApiContentIdUploadRoute,
+  ApiSocialBufferDisconnectRoute: ApiSocialBufferDisconnectRoute,
+  ApiSocialBufferPublishRoute: ApiSocialBufferPublishRoute,
+  ApiSocialBufferSyncRoute: ApiSocialBufferSyncRoute,
   ApiSocialInstagramCallbackRoute: ApiSocialInstagramCallbackRoute,
   ApiSocialInstagramConnectRoute: ApiSocialInstagramConnectRoute,
   ApiSocialInstagramDisconnectRoute: ApiSocialInstagramDisconnectRoute,
@@ -612,6 +697,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiSocialTiktokConnectRoute: ApiSocialTiktokConnectRoute,
   ApiSocialTiktokDisconnectRoute: ApiSocialTiktokDisconnectRoute,
   ApiSocialTiktokUploadRoute: ApiSocialTiktokUploadRoute,
+  ApiSocialBufferMediaTokenRoute: ApiSocialBufferMediaTokenRoute,
   ApiSocialInstagramMediaTokenRoute: ApiSocialInstagramMediaTokenRoute,
   ApiSocialTiktokMediaTokenRoute: ApiSocialTiktokMediaTokenRoute,
 }

@@ -1,4 +1,4 @@
-// Delivery jobs hold the current video in R2 while Instagram or TikTok fetches it.
+// Delivery jobs hold the current video in R2 while a provider can fetch it.
 export const canReplaceVideoAssetSql = `
   NOT EXISTS (
     SELECT 1 FROM instagram_publish_jobs AS job
@@ -11,6 +11,11 @@ export const canReplaceVideoAssetSql = `
   )
   AND NOT EXISTS (
     SELECT 1 FROM tiktok_upload_jobs
+    WHERE content_id = content_items.id AND user_id = content_items.user_id
+      AND media_hash IS NOT NULL AND media_expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+  )
+  AND NOT EXISTS (
+    SELECT 1 FROM buffer_publish_jobs
     WHERE content_id = content_items.id AND user_id = content_items.user_id
       AND media_hash IS NOT NULL AND media_expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
   )

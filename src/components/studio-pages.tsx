@@ -41,6 +41,7 @@ function formatFileSize(size: number | null) {
 function SocialIcon({ platform }: { platform: string }) {
   if (platform === "Instagram") return <Icon className="social-icon" ><rect x="3" y="3" width="18" height="18" rx="5" /><circle cx="12" cy="12" r="4" /><circle cx="17.5" cy="6.5" r=".8" /></Icon>;
   if (platform === "TikTok") return <Icon className="social-icon tiktok-icon"><path d="M14 3v11.2a4.2 4.2 0 1 1-3.3-4.1M14 3c.5 3.2 2.5 5 5.5 5.5" /></Icon>;
+  if (platform === "Buffer") return <Icon className="social-icon"><path d="m12 3 9 5-9 5-9-5 9-5ZM3 12l9 5 9-5M3 16l9 5 9-5" /></Icon>;
   if (platform === "YouTube") return <Icon className="social-icon youtube-icon"><rect x="2.5" y="5" width="19" height="14" rx="4" /><path d="m10 9 5 3-5 3z" /></Icon>;
   return <Icon className="social-icon"><circle cx="12" cy="12" r="9" /><path d="M8 12h8M12 8v8" /></Icon>;
 }
@@ -148,7 +149,7 @@ export function CalendarPage() {
         </li>)}
       </ol>
     </div>
-    <PageSection title="Publicaciones programadas" detail="El calendario organiza las fechas; la publicación en Instagram se confirma desde la biblioteca.">
+    <PageSection title="Publicaciones programadas" detail="Organiza las fechas aquí y confirma cada envío desde la biblioteca.">
       {loading ? <SkeletonRows count={3} label="Cargando publicaciones programadas" variant="compact" /> : scheduled.length === 0 ? <p className="content-empty">Todavía no hay piezas programadas. Añade una fecha desde la biblioteca.</p> : <ul className="schedule-list">
         {scheduled.map((item) => {
           const date = new Date(item.scheduled_at!);
@@ -164,11 +165,16 @@ export function CalendarPage() {
 }
 
 function accountLabel(account: SocialAccountSummary, accounts: SocialAccountSummary[]) {
-  const duplicate = accounts.some((other) => other.id !== account.id && other.platform === account.platform && other.handle === account.handle);
+  const duplicate = accounts.some((other) => other.id !== account.id && other.provider === account.provider
+    && other.platform === account.platform && other.handle === account.handle);
   return duplicate ? `${account.handle} · ${account.id.slice(-6)}` : account.handle;
 }
 
-type PublicationResult = { jobId?: string; status?: string; error?: string; caption?: string };
+function providerLabel(account: SocialAccountSummary) {
+  return account.provider === "buffer" ? "Buffer" : "Conexión directa";
+}
+
+type PublicationResult = { jobId?: string; status?: string; error?: string; caption?: string; detail?: string };
 
 function ContentEditor({ item, accounts, onChanged, onDeleted }: { item: ContentItem; accounts: SocialAccountSummary[]; onChanged: () => Promise<void>; onDeleted: (assetCleanupPending: boolean) => Promise<void> }) {
   const [title, setTitle] = useState(item.title);
@@ -184,12 +190,19 @@ function ContentEditor({ item, accounts, onChanged, onDeleted }: { item: Content
   const [progress, setProgress] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
   const [tiktokCaption, setTikTokCaption] = useState<string | null>(null);
-  const validAccounts = accounts.filter((account) => account.platform === "TikTok"
-    ? ["video/mp4", "video/quicktime", "video/webm"].includes(item.asset_content_type ?? "")
-    : ["video/mp4", "video/quicktime"].includes(item.asset_content_type ?? ""));
+  const validAccounts = accounts.filter((account) => {
+    const formats = ["video/mp4", "video/quicktime"];
+    if (account.platform === "TikTok" && account.provider === "nex") formats.push("video/webm");
+    return formats.includes(item.asset_content_type ?? "");
+  });
   const selectedAccount = validAccounts.find((account) => account.id === publishAccountId)
     ?? (validAccounts.length === 1 ? validAccounts[0] : undefined);
   const [publicationJobs, setPublicationJobs] = useState<Record<string, string>>({});
+  const publishLabel = publishing ? "Procesando…"
+    : !selectedAccount ? "Enviar video"
+      : publicationJobs[selectedAccount.id] ? "Consultar estado"
+        : selectedAccount.provider === "buffer" ? "Enviar a Buffer"
+          : selectedAccount.platform === "TikTok" ? "Enviar a TikTok" : "Publicar Reel";
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -257,27 +270,32 @@ function ContentEditor({ item, accounts, onChanged, onDeleted }: { item: Content
     const account = selectedAccount;
     if (!account) return;
     const knownJob = publicationJobs[account.id];
-    const isTikTok = account.platform === "TikTok";
+    const viaBuffer = account.provider === "buffer";
+    const tiktokInbox = account.platform === "TikTok" && !viaBuffer;
     if (!knownJob && (title !== item.title || description !== (item.description ?? ""))) {
       setMessage("Guarda el título y la descripción antes de enviar el video.");
       return;
     }
     const destination = `${accountLabel(account, accounts)} en ${account.platform}`;
-    const action = isTikTok ? "Enviar a la bandeja de" : "Publicar como Reel para";
-    if (!knownJob && !window.confirm(`¿${action} ${destination} el video “${item.title}”?`)) return;
+    const provider = viaBuffer ? "Buffer" : account.platform;
+    const confirmation = viaBuffer
+      ? `¿Enviar a Buffer el video “${item.title}” para publicarlo en ${destination}?`
+      : tiktokInbox ? `¿Enviar el video “${item.title}” a la bandeja de ${destination}?`
+        : `¿Publicar el video “${item.title}” como Reel para ${destination}?`;
+    if (!knownJob && !window.confirm(confirmation)) return;
     setMessage(null);
     setTikTokCaption(null);
     setPublishing(true);
     try {
-      const endpoint = isTikTok ? "/api/social/tiktok/upload" : "/api/social/instagram/publish";
+      const endpoint = viaBuffer ? "/api/social/buffer/publish" : tiktokInbox ? "/api/social/tiktok/upload" : "/api/social/instagram/publish";
       async function requestPublication(body: object) {
         const response = await fetch(endpoint, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(body),
         });
-        const result = await response.json() as PublicationResult;
-        if (!response.ok || !result.jobId) throw new Error(result.error ?? `No se pudo consultar ${account!.platform}.`);
+        const result = await response.json().catch(() => null) as PublicationResult | null;
+        if (!result?.jobId || (!response.ok && !result.status)) throw new Error(result?.error ?? `No se pudo consultar ${provider}.`);
         return result;
       }
       let result = await requestPublication(knownJob
@@ -286,7 +304,8 @@ function ContentEditor({ item, accounts, onChanged, onDeleted }: { item: Content
       const jobId = result.jobId!;
       setPublicationJobs((jobs) => ({ ...jobs, [account.id]: jobId }));
 
-      for (let attempt = 0; attempt <= 24; attempt++) {
+      const maxChecks = viaBuffer ? 5 : 24;
+      for (let attempt = 0; attempt <= maxChecks; attempt++) {
         if (result.status === "published") {
           setState("publicada");
           await onChanged();
@@ -294,20 +313,24 @@ function ContentEditor({ item, accounts, onChanged, onDeleted }: { item: Content
           return;
         }
         if (result.status === "awaiting_user") {
-          setTikTokCaption(result.caption ?? null);
-          setMessage(`Video en la bandeja de ${destination}. Abre la notificación, revisa el texto y publica desde TikTok.`);
+          if (tiktokInbox) {
+            setTikTokCaption(result.caption ?? null);
+            setMessage(`Video en la bandeja de ${destination}. Abre la notificación, revisa el texto y publica desde TikTok.`);
+          } else {
+            setMessage(result.detail ?? `Abre Buffer para revisar y completar la publicación de ${destination}.`);
+          }
           return;
         }
         if (result.status === "failed") setPublicationJobs(({ [account.id]: _, ...jobs }) => jobs);
         if (result.status === "failed" || result.status === "needs_review") {
-          throw new Error(result.error ?? `${account.platform} no pudo completar el envío.`);
+          throw new Error(result.error ?? `${provider} no pudo completar el envío.`);
         }
-        if (attempt === 24) break;
-        setMessage(`${account.platform} está procesando el video…`);
-        await new Promise((resolve) => setTimeout(resolve, isTikTok ? 4000 : 2500));
+        if (attempt === maxChecks) break;
+        setMessage(`${provider} está procesando el video…`);
+        await new Promise((resolve) => setTimeout(resolve, tiktokInbox || viaBuffer ? 4000 : 2500));
         result = await requestPublication({ action: "check", jobId });
       }
-      setMessage(`El video sigue procesándose en ${account.platform}. Puedes consultar su estado.`);
+      setMessage(`El video sigue procesándose en ${provider}. Puedes consultar su estado.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "No se pudo enviar el video.");
     } finally {
@@ -345,9 +368,9 @@ function ContentEditor({ item, accounts, onChanged, onDeleted }: { item: Content
           {["aprobada", "publicada"].includes(item.state) && validAccounts.length > 0 && <div className="publish-social-control">
             <label>Cuenta de destino<select value={selectedAccount?.id ?? ""} onChange={(e) => { setPublishAccountId(e.target.value); setTikTokCaption(null); setMessage(null); }} disabled={publishing}>
               {validAccounts.length > 1 && <option value="">Selecciona una cuenta</option>}
-              {validAccounts.map((account) => <option key={account.id} value={account.id}>{account.platform} · {accountLabel(account, accounts)}</option>)}
+              {validAccounts.map((account) => <option key={account.id} value={account.id}>{account.platform} · {accountLabel(account, accounts)} · {providerLabel(account)}</option>)}
             </select></label>
-            <button className="quiet-button" type="button" disabled={!selectedAccount || saving || uploading || publishing} onClick={() => void publishVideo()}>{publishing ? "Procesando…" : selectedAccount && publicationJobs[selectedAccount.id] ? "Consultar estado" : selectedAccount?.platform === "TikTok" ? "Enviar a TikTok" : selectedAccount ? "Publicar Reel" : "Enviar video"}</button>
+            <button className="quiet-button" type="button" disabled={!selectedAccount || saving || uploading || publishing} onClick={() => void publishVideo()}>{publishLabel}</button>
           </div>}
           <button className="quiet-button delete-content-button" type="button" disabled={saving || uploading || publishing} onClick={() => void remove()}>Eliminar pieza</button>
         </div>
@@ -386,7 +409,10 @@ export function LibraryPage() {
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : "No se pudo cargar la biblioteca."); })
       .finally(() => { if (!cancelled) setLoading(false); });
     listSocialAccountsFn()
-      .then((result) => { if (!cancelled) setSocialAccounts(result.accounts.filter((account) => account.status === "conectada")); })
+      .then((result) => {
+        if (!cancelled) setSocialAccounts(result.accounts.filter((account) => account.status === "conectada"
+          && (account.provider !== "buffer" || result.configured.Buffer)));
+      })
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, []);
@@ -438,11 +464,37 @@ export function LibraryPage() {
   </StudioShell>;
 }
 
+function SocialAccountRow({ account, label, actions }: {
+  account: SocialAccountSummary;
+  label: string;
+  actions?: React.ReactNode;
+}) {
+  const instagram = account.platform === "Instagram";
+  const viaBuffer = account.provider === "buffer";
+  const expired = !viaBuffer && instagram && !!account.token_expires_at && Date.parse(account.token_expires_at) <= Date.now();
+  const connected = account.status === "conectada" && !expired;
+  const status = account.status === "requiere_atencion" ? "Requiere atención" : expired ? "Autorización vencida" : connected ? "Conectada" : "Desconectada";
+  return <li>
+    <div className="account-row">
+      <div className={`account-social account-social-${account.platform.toLowerCase()}`}><SocialIcon platform={account.platform} /></div>
+      <div className="account-identity">
+        <strong title={label}>{label}</strong>
+        <span>{account.platform} · {providerLabel(account)}</span>
+      </div>
+      <div className="account-purpose">{viaBuffer ? "Publicaciones" : instagram ? "Reels" : "Borradores de video"}</div>
+      <span className={`account-status${connected ? "" : " account-status-muted"}`}><i />{status}</span>
+    </div>
+    {actions && <div className="account-disconnect-row">{actions}</div>}
+  </li>;
+}
+
 export function AccountsPage() {
   const [connections, setConnections] = useState<Awaited<ReturnType<typeof listSocialAccountsFn>> | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
+  const [syncingBuffer, setSyncingBuffer] = useState(false);
+  const bufferAccounts = connections?.accounts.filter((account) => account.provider === "buffer") ?? [];
   const platforms: SocialPlatform[] = ["Instagram", "TikTok"];
 
   useEffect(() => {
@@ -475,12 +527,15 @@ export function AccountsPage() {
   }, []);
 
   async function disconnectAccount(account: SocialAccountSummary, label: string) {
-    if (!window.confirm(`¿Desconectar ${label} de ${account.platform}?`)) return;
+    const viaBuffer = account.provider === "buffer";
+    const provider = viaBuffer ? "buffer" : account.platform.toLowerCase();
+    const question = viaBuffer ? `¿Desvincular de Nex el canal ${label} de Buffer?` : `¿Desconectar ${label} de ${account.platform}?`;
+    if (!window.confirm(question)) return;
     setDisconnecting(account.id);
     setAccountError(null);
     setNotice(null);
     try {
-      const response = await fetch(`/api/social/${account.platform.toLowerCase()}/disconnect`, {
+      const response = await fetch(`/api/social/${provider}/disconnect`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ accountId: account.id }),
@@ -491,11 +546,32 @@ export function AccountsPage() {
         ...current,
         accounts: current.accounts.map((row) => row.id === account.id ? { ...row, status: "desconectada", token_expires_at: null } : row),
       });
-      setNotice(`${label} se desconectó de ${account.platform} en Nex.`);
+      setNotice(viaBuffer ? `${label} se desvinculó de Nex.` : `${label} se desconectó de ${account.platform} en Nex.`);
     } catch (error) {
       setAccountError(error instanceof Error ? error.message : "No se pudo desconectar la cuenta.");
     } finally {
       setDisconnecting(null);
+    }
+  }
+
+  async function syncBuffer() {
+    setSyncingBuffer(true);
+    setAccountError(null);
+    setNotice(null);
+    try {
+      const response = await fetch("/api/social/buffer/sync", { method: "POST" });
+      const data = await response.json().catch(() => null) as { synced?: number; error?: string } | null;
+      if (!response.ok || typeof data?.synced !== "number") throw new Error(data?.error ?? "No se pudieron sincronizar los canales de Buffer.");
+      try {
+        setConnections(await listSocialAccountsFn());
+      } catch {
+        throw new Error("Se sincronizó Buffer, pero la lista no se pudo cargar. Recarga la página para verla.");
+      }
+      setNotice(data.synced === 1 ? "Se sincronizó un canal de Buffer." : `Se sincronizaron ${data.synced} canales de Buffer.`);
+    } catch (error) {
+      setAccountError(error instanceof Error ? error.message : "No se pudieron sincronizar los canales de Buffer.");
+    } finally {
+      setSyncingBuffer(false);
     }
   }
 
@@ -504,10 +580,39 @@ export function AccountsPage() {
     {notice && <p className="content-feedback" role="status">{notice}</p>}
     {accountError && <p className="content-feedback" role="alert">{accountError}</p>}
     {!connections && !accountError && <SkeletonRows count={2} label="Cargando cuentas conectadas" variant="compact" />}
+    {connections && <section aria-label="Cuentas de Buffer">
+      <div className="account-overview">
+        <span className="overview-icon"><SocialIcon platform="Buffer" /></span>
+        <div>
+          <strong>Buffer</strong>
+          <p>Importa los canales de Instagram y TikTok que ya conectaste en Buffer.</p>
+        </div>
+        {connections.configured.Buffer && <button className="primary-button" type="button" disabled={syncingBuffer || disconnecting !== null} onClick={() => void syncBuffer()}>
+          {syncingBuffer ? "Sincronizando…" : "Sincronizar canales"}
+        </button>}
+      </div>
+      {!connections.configured.Buffer && <div className="social-config-note">
+        <strong>Configuración pendiente</strong>
+        <p>Configura el acceso de Nex a Buffer para sincronizar tus canales.</p>
+      </div>}
+      {bufferAccounts.length === 0
+        ? connections.configured.Buffer && <p className="content-empty">Añade tus perfiles en Buffer y pulsa Sincronizar canales para importarlos a Nex.</p>
+        : <ul className="account-list">
+          {bufferAccounts.map((account) => {
+            const label = accountLabel(account, bufferAccounts);
+            return <SocialAccountRow key={account.id} account={account} label={label} actions={account.status !== "desconectada" && <>
+              {account.status === "requiere_atencion" && <span>Revisa la conexión en Buffer y sincroniza de nuevo.</span>}
+              <button className="quiet-button" type="button" disabled={syncingBuffer || disconnecting !== null} onClick={() => void disconnectAccount(account, label)}>
+                {disconnecting === account.id ? "Desvinculando…" : `Desvincular ${label}`}
+              </button>
+            </>} />;
+          })}
+        </ul>}
+    </section>}
     {connections && platforms.map((platform) => {
       const provider = platform.toLowerCase();
       const instagram = platform === "Instagram";
-      const accounts = connections.accounts.filter((account) => account.platform === platform);
+      const accounts = connections.accounts.filter((account) => account.provider === "nex" && account.platform === platform);
       const endpoint = `/api/social/${provider}/connect`;
       const action = accounts.length ? "Añadir cuenta" : `Conectar ${platform}`;
       return <section key={platform} aria-label={`Cuentas de ${platform}`}>
@@ -531,19 +636,10 @@ export function AccountsPage() {
             const label = accountLabel(account, accounts);
             const connected = account.status === "conectada";
             const expired = instagram && !!account.token_expires_at && Date.parse(account.token_expires_at) <= Date.now();
-            const status = !connected ? "Desconectada" : expired ? "Autorización vencida" : "Conectada";
-            return <li key={account.id}>
-              <div className="account-row">
-                <div className={`account-social account-social-${provider}`}><SocialIcon platform={platform} /></div>
-                <div className="account-identity"><strong title={label}>{label}</strong><span>{instagram ? "Cuenta profesional" : "Cuenta de TikTok"}</span></div>
-                <div className="account-purpose">{instagram ? "Reels" : "Borradores de video"}</div>
-                <span className={`account-status${!connected || expired ? " account-status-muted" : ""}`}><i />{status}</span>
-              </div>
-              {(connected || connections.configured[platform]) && <div className="account-disconnect-row">
+            return <SocialAccountRow key={account.id} account={account} label={label} actions={(connected || connections.configured[platform]) && <>
                 {connections.configured[platform] && (!connected || expired) && <a href={endpoint} className="quiet-button" aria-label={`Volver a conectar ${label} en ${platform}`}>Volver a conectar</a>}
-                {connected && <button className="quiet-button" type="button" disabled={disconnecting !== null} onClick={() => void disconnectAccount(account, label)}>{disconnecting === account.id ? "Desconectando…" : `Desconectar ${label}`}</button>}
-              </div>}
-            </li>;
+                {connected && <button className="quiet-button" type="button" disabled={disconnecting !== null || syncingBuffer} onClick={() => void disconnectAccount(account, label)}>{disconnecting === account.id ? "Desconectando…" : `Desconectar ${label}`}</button>}
+              </>} />;
           })}
         </ul>}
       </section>;
@@ -564,7 +660,7 @@ export function SettingsPage() {
     <PageSection title="Apariencia" detail="El modo oscuro se abre por defecto. Puedes cambiarlo desde el botón de tema en la barra superior.">
       <p className="settings-hint">La preferencia de tema se guarda en este navegador.</p>
     </PageSection>
-    <PageSection title="Redes sociales" detail="Administra tus conexiones de Instagram y TikTok.">
+    <PageSection title="Redes sociales" detail="Administra tus conexiones de Buffer, Instagram y TikTok.">
       <Link className="primary-button" to="/cuentas">Gestionar cuentas</Link>
     </PageSection>
     <RegisteredUsersSection />

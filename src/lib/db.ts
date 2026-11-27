@@ -24,6 +24,8 @@ export type RuntimeEnv = {
   TIKTOK_CLIENT_KEY?: string;
   TIKTOK_CLIENT_SECRET?: string;
   TIKTOK_TOKEN_ENCRYPTION_KEY?: string;
+  BUFFER_API_KEY?: string;
+  BUFFER_ORGANIZATION_ID?: string;
   PUBLIC_APP_URL?: string;
   NEX_ADMIN_EMAILS?: string;
 };

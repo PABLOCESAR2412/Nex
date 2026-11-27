@@ -21,7 +21,10 @@ const assets = vi.hoisted(() => ({
 const providers = vi.hoisted(() => ({
   instagram: vi.fn(),
   tiktok: vi.fn(),
+  buffer: vi.fn(),
 }));
+
+const env = vi.hoisted(() => ({ BUFFER_API_KEY: "test-key", BUFFER_ORGANIZATION_ID: "test-org" }));
 
 vi.mock("./db", () => ({
   getDb: () => ({
@@ -29,6 +32,7 @@ vi.mock("./db", () => ({
     batch: db.batch,
   }),
   getAssets: () => assets,
+  getRuntimeEnv: () => env,
   newId: () => "test-upload-row-id",
 }));
 
@@ -38,6 +42,10 @@ vi.mock("../routes/api.social.instagram.publish", () => ({
 
 vi.mock("./tiktok-workflow", () => ({
   handleTikTokUploadRequest: providers.tiktok,
+}));
+
+vi.mock("./buffer-workflow", () => ({
+  handleBufferPublishRequest: providers.buffer,
 }));
 
 const RESOURCE = new URL("https://nex.example/api/mcp");
@@ -157,6 +165,7 @@ describe("Nex MCP server", () => {
     expect(names).toContain("approve_video_content");
     expect(names).toContain("publish_social_video");
     expect(names).toContain("check_social_publish");
+    expect(names).toHaveLength(15);
     expect(names).not.toContain("upload_content_from_url");
   });
 
@@ -289,12 +298,13 @@ describe("Nex MCP server", () => {
       ["instagram", "ig-second", "ig-job", "published", providers.instagram],
       ["tiktok", "tt-first", "tt-job", "awaiting_user", providers.tiktok],
     ] as const) {
+      db.first.mockResolvedValueOnce({ provider: "nex" });
       expect(await callTool("publish_social_video", {
         platform,
         content_id: contentId,
         account_id: accountId,
         confirm_publish: true,
-      }, 13)).toMatchObject({ platform, jobId, status: "processing" });
+      }, 13)).toMatchObject({ platform, provider: "nex", jobId, status: "processing" });
       const [request, user] = handler.mock.calls[0] ?? [];
       expect(user).toBe("user-test-id");
       expect(await request.clone().json()).toEqual({ action: "start", contentId, accountId });
@@ -325,6 +335,7 @@ describe("Nex MCP server", () => {
   });
 
   it("returns the reason a provider could not start and preserves reviewable final states", async () => {
+    db.first.mockResolvedValueOnce({ provider: "nex" });
     providers.instagram
       .mockResolvedValueOnce(Response.json({ error: "La autorización de Instagram venció." }, { status: 409 }))
       .mockResolvedValueOnce(Response.json({ jobId: "ig-job", status: "needs_review", error: "Revisa Instagram." }, { status: 502 }));
@@ -339,5 +350,46 @@ describe("Nex MCP server", () => {
     });
     expect(await callTool("check_social_publish", { platform: "instagram", job_id: "ig-job" }, 18))
       .toMatchObject({ status: "needs_review", error: "Revisa Instagram." });
+  });
+
+  it("selects the owned Buffer account and preserves legacy Instagram call shapes", async () => {
+    const destination = { id: "ig-buffer", platform: "instagram", provider: "buffer", handle: "@ig-buffer" };
+    db.all.mockResolvedValueOnce({ results: [destination] }).mockResolvedValueOnce({ results: [destination] });
+    expect(await callTool("list_social_accounts", { platform: "instagram", provider: "buffer" }, 19)).toEqual([destination]);
+    expect(db.bind).toHaveBeenLastCalledWith("user-test-id", "instagram", "instagram", "buffer", "buffer", "test-org");
+    expect(await callTool("list_instagram_accounts", {}, 20)).toEqual([destination]);
+    expect(db.bind).toHaveBeenLastCalledWith("user-test-id", "test-org");
+
+    db.first.mockResolvedValueOnce({ provider: "buffer" }).mockResolvedValueOnce({ id: "buffer-job" });
+    providers.buffer.mockImplementation(async (request: Request, owner: string) => {
+      expect(owner).toBe("user-test-id");
+      const payload = await request.json() as { platform: string; action: string; jobId?: string };
+      expect(payload.platform).toBe("instagram");
+      if (payload.action === "start") expect(payload).toMatchObject({ contentId: "video", accountId: destination.id });
+      if (payload.action === "check") expect(payload.jobId).toBe("buffer-job");
+      return Response.json({ jobId: "buffer-job", status: payload.action === "start" ? "queued" : "published" });
+    });
+    expect(await callTool("publish_instagram_reel", {
+      content_id: "video", account_id: destination.id, confirm_publish: true,
+    }, 21)).toMatchObject({ provider: "buffer", platform: "instagram", jobId: "buffer-job", status: "queued" });
+    expect(db.bind).toHaveBeenLastCalledWith(destination.id, "user-test-id", "instagram");
+    expect(await callTool("check_instagram_publish", { job_id: "buffer-job" }, 22))
+      .toMatchObject({ provider: "buffer", platform: "instagram", jobId: "buffer-job", status: "published" });
+    expect(db.bind).toHaveBeenLastCalledWith("buffer-job", "user-test-id", "instagram");
+    expect(providers.instagram).not.toHaveBeenCalled();
+  });
+
+  it("rejects a provider mismatch and Buffer jobs outside the selected account platform", async () => {
+    db.first.mockResolvedValueOnce({ provider: "nex" });
+    const mismatched = await toolResponse("publish_social_video", {
+      platform: "tiktok", provider: "buffer", content_id: "video", account_id: "account", confirm_publish: true,
+    }, 23);
+    const wrongJob = await toolResponse("check_social_publish", {
+      platform: "tiktok", provider: "buffer", job_id: "instagram-job",
+    }, 24);
+    expect(await readMcpResponse(mismatched)).toMatchObject({ result: { isError: true } });
+    expect(await readMcpResponse(wrongJob)).toMatchObject({ result: { isError: true } });
+    expect(providers.buffer).not.toHaveBeenCalled();
+    expect(providers.tiktok).not.toHaveBeenCalled();
   });
 });

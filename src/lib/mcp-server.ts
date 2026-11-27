@@ -1,17 +1,25 @@
 import { McpServer, requireScopes, type AuthInfo, type CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod/v4";
-import { getAssets, getDb, newId } from "./db";
+import { getAssets, getDb, getRuntimeEnv, newId } from "./db";
 import { handleInstagramPublishRequest } from "../routes/api.social.instagram.publish";
+import { handleBufferPublishRequest } from "./buffer-workflow";
 import { randomSecret, sha256Hex } from "./instagram";
 import { handleTikTokUploadRequest } from "./tiktok-workflow";
 import { canReplaceVideoAssetSql } from "./content-asset-guard";
 
-const SERVER_INSTRUCTIONS = "Crea una pieza con create_content, con su título y descripción. Adjunta el archivo con start_video_upload, envía las partes directamente por HTTP PUT desde el equipo que tiene el video y termina con complete_video_upload. Usa list_social_accounts para determinar la cuenta destino. Si el usuario aprueba la pieza, usa approve_video_content. Publicar o enviar un video a una plataforma externa requiere la confirmación explícita del usuario para esa cuenta.";
+const SERVER_INSTRUCTIONS = "Crea una pieza con create_content, con su título y descripción. Adjunta el archivo con start_video_upload, envía las partes directamente por HTTP PUT desde el equipo que tiene el video y termina con complete_video_upload. Usa list_social_accounts para consultar la plataforma, cuenta y proveedor de destino (Nex o Buffer). Si el usuario aprueba la pieza, usa approve_video_content. Publicar o enviar un video a una plataforma externa requiere la confirmación explícita del usuario para esa cuenta.";
 const VIDEO_PART_SIZE = 8 * 1024 * 1024;
 const MAX_VIDEO_SIZE = 1024 * 1024 * 1024;
 
 const socialPlatform = z.enum(["instagram", "tiktok"]);
 type SocialPlatform = z.infer<typeof socialPlatform>;
+const socialProvider = z.enum(["nex", "buffer"]);
+type SocialProvider = z.infer<typeof socialProvider>;
+
+function configuredBufferOrganization() {
+  const { BUFFER_API_KEY, BUFFER_ORGANIZATION_ID } = getRuntimeEnv();
+  return BUFFER_API_KEY?.trim() ? BUFFER_ORGANIZATION_ID?.trim() || null : null;
+}
 
 type NexMcpContext = {
   era: "legacy" | "modern";
@@ -98,27 +106,77 @@ function userIdFrom(context: NexMcpContext) {
   return typeof value === "string" ? value : "";
 }
 
-async function runSocialAction(request: Request | undefined, userId: string, platform: SocialPlatform, payload: Record<string, unknown>) {
+async function runSocialAction(
+  request: Request | undefined,
+  userId: string,
+  platform: SocialPlatform,
+  provider: SocialProvider,
+  payload: Record<string, string>,
+) {
   if (!request) return failure("La solicitud HTTP autenticada no está disponible.");
-  const handler = platform === "instagram" ? handleInstagramPublishRequest : handleTikTokUploadRequest;
+  const handler = provider === "buffer" ? handleBufferPublishRequest
+    : platform === "instagram" ? handleInstagramPublishRequest : handleTikTokUploadRequest;
   try {
     const response = await handler(new Request(request.url, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(provider === "buffer" ? { ...payload, platform } : payload),
     }), userId);
     const data = await response.json().catch(() => null) as { status?: string; error?: string } | null;
     if (!data || (!response.ok && !data.status)) {
       return failure(data?.error || `Nex no pudo completar la operación (HTTP ${response.status}).`);
     }
-    return result({ ...data, platform });
+    return result({ ...data, platform, provider });
   } catch {
     return failure("Nex no pudo completar la operación con la plataforma.");
   }
 }
 
+async function startSocialPublish(
+  request: Request | undefined,
+  userId: string,
+  platform: SocialPlatform,
+  contentId: string,
+  accountId: string,
+  provider?: SocialProvider,
+) {
+  try {
+    const account = await getDb().prepare(
+      "SELECT provider FROM social_accounts WHERE id = ? AND user_id = ? AND lower(platform) = ?",
+    ).bind(accountId, userId, platform).first<{ provider: SocialProvider }>();
+    if (!account) return failure("No se encontró la cuenta de la plataforma seleccionada en Nex.");
+    if (provider && provider !== account.provider) {
+      return failure("La cuenta usa un proveedor diferente. Consulta list_social_accounts y elige la cuenta correcta.");
+    }
+    return runSocialAction(request, userId, platform, account.provider, { action: "start", contentId, accountId });
+  } catch {
+    return failure("Nex no pudo verificar la cuenta de destino.");
+  }
+}
+
+async function checkSocialPublish(
+  request: Request | undefined,
+  userId: string,
+  platform: SocialPlatform,
+  jobId: string,
+  provider?: SocialProvider,
+) {
+  try {
+    if (provider !== "nex") {
+      const job = await getDb().prepare(
+        "SELECT j.id FROM buffer_publish_jobs j JOIN social_accounts a ON a.id = j.account_id AND a.user_id = j.user_id WHERE j.id = ? AND j.user_id = ? AND lower(a.platform) = ? AND a.provider = 'buffer'",
+      ).bind(jobId, userId, platform).first<{ id: string }>();
+      if (job) return runSocialAction(request, userId, platform, "buffer", { action: "check", jobId });
+      if (provider === "buffer") return failure("No se encontró el envío de Buffer para esta plataforma.");
+    }
+    return runSocialAction(request, userId, platform, "nex", { action: "check", jobId });
+  } catch {
+    return failure("Nex no pudo verificar la publicación.");
+  }
+}
+
 export function createNexMcpServer(context: NexMcpContext) {
-  const server = new McpServer({ name: "nex", version: "1.0.0" }, { instructions: SERVER_INSTRUCTIONS });
+  const server = new McpServer({ name: "nex", version: "1.1.0" }, { instructions: SERVER_INSTRUCTIONS });
   const userId = userIdFrom(context);
   const request = context.requestInfo;
 
@@ -352,15 +410,15 @@ export function createNexMcpServer(context: NexMcpContext) {
 
   server.registerTool("list_instagram_accounts", {
     title: "List connected Instagram accounts",
-    description: "Lista las cuentas profesionales de Instagram conectadas al estudio. Devuelve IDs para elegir una cuenta al publicar.",
+    description: "Lista las cuentas profesionales de Instagram del estudio, directamente en Nex o mediante Buffer. Usa el id para elegir el destino.",
     inputSchema: z.object({}).strict(),
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     scopeChallenge: requireScopes("nex:read"),
   }, async () => {
     try {
       const { results } = await getDb().prepare(
-        "SELECT id, handle, status, token_expires_at FROM social_accounts WHERE user_id = ? AND platform = 'Instagram' AND external_account_id IS NOT NULL ORDER BY connected_at DESC",
-      ).bind(userId).all<{ id: string; handle: string; status: string; token_expires_at: string | null }>();
+        "SELECT id, handle, status, token_expires_at, provider FROM social_accounts WHERE user_id = ? AND platform = 'Instagram' AND external_account_id IS NOT NULL AND (provider = 'nex' OR buffer_organization_id = ?) ORDER BY connected_at DESC",
+      ).bind(userId, configuredBufferOrganization()).all();
       return result(results ?? []);
     } catch {
       return failure("Nex no pudo cargar las cuentas de Instagram.");
@@ -369,15 +427,15 @@ export function createNexMcpServer(context: NexMcpContext) {
 
   server.registerTool("list_social_accounts", {
     title: "List connected social accounts",
-    description: "Lista las cuentas de Instagram y TikTok vinculadas a este estudio. Usa el identificador id y la plataforma de la cuenta elegida al enviar un video.",
-    inputSchema: z.object({ platform: socialPlatform.optional() }).strict(),
+    description: "Lista las cuentas de Instagram y TikTok de este estudio, con su id, plataforma y proveedor (nex o buffer). Puedes filtrar por plataforma o proveedor.",
+    inputSchema: z.object({ platform: socialPlatform.optional(), provider: socialProvider.optional() }).strict(),
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     scopeChallenge: requireScopes("nex:read"),
-  }, async ({ platform }) => {
+  }, async ({ platform, provider }) => {
     try {
       const { results } = await getDb().prepare(
-        "SELECT id, lower(platform) AS platform, handle, status, token_expires_at FROM social_accounts WHERE user_id = ? AND platform IN ('Instagram', 'TikTok') AND status = 'conectada' AND external_account_id IS NOT NULL AND (? IS NULL OR lower(platform) = ?) ORDER BY platform, connected_at DESC",
-      ).bind(userId, platform ?? null, platform ?? null).all();
+        "SELECT id, lower(platform) AS platform, provider, handle, status, token_expires_at FROM social_accounts WHERE user_id = ? AND platform IN ('Instagram', 'TikTok') AND status = 'conectada' AND external_account_id IS NOT NULL AND (? IS NULL OR lower(platform) = ?) AND (? IS NULL OR provider = ?) AND (provider = 'nex' OR buffer_organization_id = ?) ORDER BY platform, connected_at DESC",
+      ).bind(userId, platform ?? null, platform ?? null, provider ?? null, provider ?? null, configuredBufferOrganization()).all();
       return result(results ?? []);
     } catch {
       return failure("Nex no pudo cargar las cuentas sociales.");
@@ -411,50 +469,51 @@ export function createNexMcpServer(context: NexMcpContext) {
 
   server.registerTool("publish_social_video", {
     title: "Send video to a connected social account",
-    description: "Envía una pieza aprobada con video a la cuenta destino. En Instagram inicia la publicación del Reel; en TikTok envía el archivo a la bandeja de la cuenta para que el usuario añada el texto y publique en la app. Solo usar tras confirmación explícita para la pieza y cuenta elegidas. Guarda el jobId y usa check_social_publish.",
+    description: "Envía una pieza aprobada a la cuenta elegida. Nex detecta si se conecta directamente o por Buffer. Con Nex directo, Instagram publica el Reel y TikTok recibe el video en su bandeja. Solo usar tras confirmación explícita para esa pieza y cuenta. Conserva jobId, plataforma y proveedor para check_social_publish.",
     inputSchema: z.object({
       platform: socialPlatform,
+      provider: socialProvider.optional(),
       content_id: z.string().min(1),
       account_id: z.string().min(1),
       confirm_publish: z.literal(true),
     }).strict(),
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     scopeChallenge: requireScopes("nex:publish"),
-  }, async ({ platform, content_id, account_id }) =>
-    runSocialAction(request, userId, platform, { action: "start", contentId: content_id, accountId: account_id }),
+  }, async ({ platform, provider, content_id, account_id }) =>
+    startSocialPublish(request, userId, platform, content_id, account_id, provider),
   );
 
   server.registerTool("check_social_publish", {
     title: "Check social video status",
-    description: "Consulta una operación por plataforma y job_id. En Instagram también finaliza la publicación ya confirmada al quedar listo el Reel. En TikTok, awaiting_user indica que el usuario debe abrir TikTok para completar la publicación.",
-    inputSchema: z.object({ platform: socialPlatform, job_id: z.string().min(1) }).strict(),
+    description: "Consulta un envío por plataforma, job_id y proveedor opcional. Instagram directo completa la publicación confirmada al quedar listo el Reel. Si TikTok directo devuelve awaiting_user, abre TikTok para completar la publicación.",
+    inputSchema: z.object({ platform: socialPlatform, job_id: z.string().min(1), provider: socialProvider.optional() }).strict(),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     scopeChallenge: requireScopes("nex:publish"),
-  }, async ({ platform, job_id }) =>
-    runSocialAction(request, userId, platform, { action: "check", jobId: job_id }),
+  }, async ({ platform, provider, job_id }) => checkSocialPublish(request, userId, platform, job_id, provider),
   );
 
   server.registerTool("publish_instagram_reel", {
     title: "Publish an Instagram Reel",
-    description: "Inicia la publicación de un Reel aprobado en la cuenta de Instagram elegida. Usa la descripción de la pieza como texto del Reel y el título si no hay descripción. Solo llamar si el usuario pidió y confirmó publicar la pieza en esa cuenta.",
+    description: "Inicia la publicación del Reel aprobado en la cuenta de Instagram elegida, directamente en Nex o mediante Buffer. Solo usar tras confirmación explícita para esa pieza y cuenta.",
     inputSchema: z.object({
       content_id: z.string().min(1),
       account_id: z.string().min(1),
+      provider: socialProvider.optional(),
       confirm_publish: z.literal(true),
     }).strict(),
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     scopeChallenge: requireScopes("nex:publish"),
-  }, async ({ content_id, account_id }) =>
-    runSocialAction(request, userId, "instagram", { action: "start", contentId: content_id, accountId: account_id }),
+  }, async ({ provider, content_id, account_id }) =>
+    startSocialPublish(request, userId, "instagram", content_id, account_id, provider),
   );
 
   server.registerTool("check_instagram_publish", {
     title: "Check Instagram publishing status",
-    description: "Consulta y avanza el estado de un Reel que ya se está procesando en Instagram.",
-    inputSchema: z.object({ job_id: z.string().min(1) }).strict(),
+    description: "Consulta un Reel ya enviado a Instagram, directamente en Nex o mediante Buffer.",
+    inputSchema: z.object({ job_id: z.string().min(1), provider: socialProvider.optional() }).strict(),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     scopeChallenge: requireScopes("nex:publish"),
-  }, async ({ job_id }) => runSocialAction(request, userId, "instagram", { action: "check", jobId: job_id }));
+  }, async ({ provider, job_id }) => checkSocialPublish(request, userId, "instagram", job_id, provider));
 
   return server;
 }

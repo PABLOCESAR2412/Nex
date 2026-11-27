@@ -87,32 +87,48 @@ describe("MCP HTTP authorization gate", () => {
     expect(body.result.tools[2]?.securitySchemes).toBeUndefined();
   });
 
-  it("serves ChatGPT tools through authenticated MCP with profile and scope metadata", async () => {
+  it.each(["2025-11-25", "2026-07-28"])("serves all 15 tools over MCP %s without pagination", async (version) => {
     const token = `nex_access_${"a".repeat(43)}`;
     mocks.resolveMcpAccessToken.mockResolvedValue({
       token,
       clientId: "chatgpt-client",
-      scopes: ["nex:read", "nex:write", "nex:publish"],
+      scopes: ["nex:read"],
       expiresAt: Math.floor(Date.now() / 1000) + 3600,
       resource: new URL("https://nex.example/api/mcp"),
       resourceMetadataUrl: "https://nex.example/.well-known/oauth-protected-resource/api/mcp",
       extra: { userId: "user-test-id" },
     });
 
+    const modern = version === "2026-07-28";
     const response = await handleMcpRequest(request({
       authorization: `Bearer ${token}`,
       origin: "https://chatgpt.com",
-    }, { jsonrpc: "2.0", id: 6, method: "tools/list" }));
+      "mcp-protocol-version": version,
+      ...(modern ? { "mcp-method": "tools/list" } : {}),
+    }, {
+      jsonrpc: "2.0", id: 6, method: "tools/list",
+      ...(modern ? { params: { _meta: {
+        "io.modelcontextprotocol/protocolVersion": version,
+        "io.modelcontextprotocol/clientCapabilities": {},
+        "io.modelcontextprotocol/clientInfo": { name: "test-client", version: "1.0.0" },
+      } } } : {}),
+    }));
 
-    expect(response.status).toBe(200);
+    expect(response.status, await response.clone().text()).toBe(200);
     expect(response.headers.get("access-control-allow-origin")).toBe("https://chatgpt.com");
-    const body = await readRpcResponse(response) as { result: { tools: Array<{ name: string; securitySchemes?: unknown; _meta?: Record<string, unknown> }> } };
+    const body = await readRpcResponse(response) as { result: { nextCursor?: string; tools: Array<{ name: string; securitySchemes?: unknown; _meta?: Record<string, unknown> }> } };
     const tools = new Map(body.result.tools.map((tool) => [tool.name, tool]));
+    expect(body.result.nextCursor).toBeUndefined();
+    expect(tools.size).toBe(15);
     expect(tools.get("get_profile")).toMatchObject({
       securitySchemes: [{ type: "oauth2", scopes: ["nex:read"] }],
       _meta: { "openai/profile": true },
     });
     expect(tools.get("publish_instagram_reel")?.securitySchemes).toEqual([{ type: "oauth2", scopes: ["nex:publish"] }]);
+    expect(tools.get("list_social_accounts")?.securitySchemes).toEqual([{ type: "oauth2", scopes: ["nex:read"] }]);
+    expect(tools.get("approve_video_content")?.securitySchemes).toEqual([{ type: "oauth2", scopes: ["nex:publish"] }]);
+    expect(tools.get("publish_social_video")?.securitySchemes).toEqual([{ type: "oauth2", scopes: ["nex:publish"] }]);
+    expect(tools.get("check_social_publish")?.securitySchemes).toEqual([{ type: "oauth2", scopes: ["nex:publish"] }]);
   });
 
   it("adds tool security schemes to MCP server-sent events", async () => {

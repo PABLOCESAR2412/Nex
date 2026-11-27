@@ -82,7 +82,7 @@ export const disconnectTikTokAccount = createServerOnlyFn(async (userId: string,
   const [result] = await db.batch([
     db.prepare(`UPDATE social_accounts SET status = 'desconectada', token_ciphertext = NULL, token_iv = NULL,
         token_expires_at = NULL, tiktok_refresh_lock = NULL, updated_at = datetime('now')
-        WHERE id = ? AND user_id = ? AND platform = 'TikTok'`).bind(accountId, userId),
+        WHERE id = ? AND user_id = ? AND platform = 'TikTok' AND provider = 'nex'`).bind(accountId, userId),
     db.prepare(`UPDATE tiktok_upload_jobs SET media_hash = NULL, media_expires_at = NULL, status = 'needs_review',
         error = 'Cuenta desconectada. Revisa la bandeja de TikTok antes de volver a enviar el video.'
         WHERE account_id = ? AND user_id = ? AND status IN ('creating', 'processing')`).bind(accountId, userId),
@@ -92,7 +92,7 @@ export const disconnectTikTokAccount = createServerOnlyFn(async (userId: string,
 
 function findAccount(userId: string, accountId: string) {
   return getDb().prepare(`SELECT id, external_account_id, handle, token_ciphertext, token_iv, token_expires_at
-      FROM social_accounts WHERE id = ? AND user_id = ? AND platform = 'TikTok' AND status = 'conectada'`)
+      FROM social_accounts WHERE id = ? AND user_id = ? AND platform = 'TikTok' AND provider = 'nex' AND status = 'conectada'`)
     .bind(accountId, userId).first<Account>();
 }
 
@@ -170,7 +170,7 @@ export const handleTikTokUploadRequest = createServerOnlyFn(async (request: Requ
         SELECT ?, c.user_id, c.id, a.id, 'creating', ?, ?, c.asset_key, c.asset_content_type, ?, ?
         FROM content_items c JOIN social_accounts a ON a.user_id = c.user_id
         WHERE c.id = ? AND c.user_id = ? AND c.asset_key = ? AND c.state IN ('aprobada', 'publicada')
-          AND a.id = ? AND a.platform = 'TikTok' AND a.status = 'conectada'
+          AND a.id = ? AND a.platform = 'TikTok' AND a.provider = 'nex' AND a.status = 'conectada'
         ON CONFLICT (content_id, account_id) WHERE status <> 'failed' DO NOTHING`)
       .bind(job.id, await sha256Hex(mediaToken), after(2 * 60 * 60_000), content.title, content.description,
         content.id, userId, content.asset_key, account.id).run();

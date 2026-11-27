@@ -63,7 +63,7 @@ export const handleInstagramPublishRequest = createServerOnlyFn(async (request: 
             db.prepare("SELECT id, title, description, state, asset_key, asset_content_type, asset_size FROM content_items WHERE id = ? AND user_id = ?")
               .bind(input.contentId, session.userId)
               .first<{ id: string; title: string; description: string | null; state: string; asset_key: string | null; asset_content_type: string | null; asset_size: number | null }>(),
-            db.prepare("SELECT id, external_account_id, token_ciphertext, token_iv, token_expires_at FROM social_accounts WHERE id = ? AND user_id = ? AND platform = 'Instagram' AND status = 'conectada'")
+            db.prepare("SELECT id, external_account_id, token_ciphertext, token_iv, token_expires_at FROM social_accounts WHERE id = ? AND user_id = ? AND platform = 'Instagram' AND provider = 'nex' AND status = 'conectada'")
               .bind(input.accountId, session.userId)
               .first<InstagramAccountRow>(),
           ]);
@@ -86,7 +86,7 @@ export const handleInstagramPublishRequest = createServerOnlyFn(async (request: 
                 SELECT ?, c.user_id, c.id, a.id, 'creating'
                 FROM content_items c JOIN social_accounts a ON a.user_id = c.user_id
                 WHERE c.id = ? AND c.user_id = ? AND c.asset_key = ? AND c.state IN ('aprobada', 'publicada')
-                AND a.id = ? AND a.platform = 'Instagram' AND a.status = 'conectada' AND a.token_ciphertext = ?
+                AND a.id = ? AND a.platform = 'Instagram' AND a.provider = 'nex' AND a.status = 'conectada' AND a.token_ciphertext = ?
                 AND NOT EXISTS (
                   SELECT 1 FROM instagram_publish_jobs j WHERE j.content_id = c.id AND j.account_id = a.id
                   AND j.status IN ('published', 'needs_review')

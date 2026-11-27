@@ -14,7 +14,7 @@ export const Route = createFileRoute("/api/social/instagram/disconnect")({
 
         const db = getDb();
         const [result] = await db.batch([
-          db.prepare("UPDATE social_accounts SET status = 'desconectada', token_ciphertext = NULL, token_iv = NULL, token_expires_at = NULL, updated_at = datetime('now') WHERE id = ? AND user_id = ? AND platform = 'Instagram'")
+          db.prepare("UPDATE social_accounts SET status = 'desconectada', token_ciphertext = NULL, token_iv = NULL, token_expires_at = NULL, updated_at = datetime('now') WHERE id = ? AND user_id = ? AND platform = 'Instagram' AND provider = 'nex'")
             .bind(input.accountId, session.userId),
           db.prepare("DELETE FROM instagram_media_grants WHERE user_id = ? AND job_id IN (SELECT id FROM instagram_publish_jobs WHERE account_id = ? AND status IN ('creating', 'processing', 'publishing'))")
             .bind(session.userId, input.accountId),
