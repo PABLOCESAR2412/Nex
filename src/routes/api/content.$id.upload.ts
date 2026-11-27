@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getCurrentSession } from "../../lib/auth";
+import { canReplaceVideoAssetSql } from "../../lib/content-asset-guard";
 import { getAssets, getDb, newId } from "../../lib/db";
 
 const PART_SIZE = 8 * 1024 * 1024;
@@ -110,10 +111,11 @@ export const Route = createFileRoute("/api/content/$id/upload")({
           }
 
           const current = await db
-            .prepare("SELECT asset_key FROM content_items WHERE id = ? AND user_id = ?")
+            .prepare(`SELECT asset_key, (${canReplaceVideoAssetSql}) AS can_replace FROM content_items WHERE id = ? AND user_id = ?`)
             .bind(params.id, session.userId)
-            .first<{ asset_key: string | null }>();
+            .first<{ asset_key: string | null; can_replace: number }>();
           if (!current) return jsonError("No se encontró la pieza.", 404);
+          if (!current.can_replace) return jsonError("Espera a que termine la publicación para reemplazar el video.", 409);
 
           const multipart = getAssets().resumeMultipartUpload(upload.asset_key, upload.upload_id);
           let object: R2Object;
@@ -123,16 +125,25 @@ export const Route = createFileRoute("/api/content/$id/upload")({
             return jsonError("No se pudo completar el archivo. Comprueba la conexión e inténtalo otra vez.", 400);
           }
 
+          let updated: D1Result;
           try {
-            const [result] = await db.batch([
-              db.prepare("UPDATE content_items SET asset_key = ?, asset_name = ?, asset_content_type = ?, asset_size = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?")
-                .bind(upload.asset_key, upload.filename, upload.content_type, object.size, params.id, session.userId),
+            [updated] = await db.batch([
+              db.prepare(`UPDATE content_items
+                SET asset_key = ?, asset_name = ?, asset_content_type = ?, asset_size = ?, updated_at = datetime('now')
+                WHERE id = ? AND user_id = ? AND asset_key IS ? AND (${canReplaceVideoAssetSql})`)
+                .bind(upload.asset_key, upload.filename, upload.content_type, object.size, params.id, session.userId, current.asset_key),
               db.prepare("DELETE FROM content_uploads WHERE id = ? AND user_id = ?").bind(upload.id, session.userId),
             ]);
-            if (!result.meta.changes) throw new Error("No se encontró la pieza.");
           } catch {
             await getAssets().delete(upload.asset_key).catch(() => undefined);
             return jsonError("El archivo llegó, pero no se pudo guardar en la pieza.", 500);
+          }
+          if (!updated.meta.changes) {
+            const saved = await db.prepare("SELECT 1 FROM content_items WHERE id = ? AND user_id = ? AND asset_key = ?")
+              .bind(params.id, session.userId, upload.asset_key).first();
+            if (saved) return Response.json({ ok: true, name: upload.filename, size: object.size });
+            await getAssets().delete(upload.asset_key).catch(() => undefined);
+            return jsonError("La pieza cambió mientras subías el video. Revisa si se está publicando y vuelve a intentar la carga.", 409);
           }
 
           if (current.asset_key && current.asset_key !== upload.asset_key) {

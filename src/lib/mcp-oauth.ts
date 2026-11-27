@@ -139,7 +139,7 @@ function consentPage(input: { requestId: string; clientName: string; email: stri
   const labels: Record<McpOAuthScope, string> = {
     "nex:read": "Consultar piezas, calendario y cuentas conectadas",
     "nex:write": "Crear borradores, cargar archivos y programar contenido",
-    "nex:publish": "Iniciar publicaciones en Instagram y consultar su estado",
+    "nex:publish": "Aprobar videos, enviarlos a Instagram o TikTok y consultar su estado",
     offline_access: "Mantener esta conexión activa renovando el acceso",
   };
   const permissions = input.scopes.map((scope) => `<li>${htmlEscape(labels[scope])}</li>`).join("");

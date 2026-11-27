@@ -2,10 +2,16 @@ import { McpServer, requireScopes, type AuthInfo, type CallToolResult } from "@m
 import { z } from "zod/v4";
 import { getAssets, getDb, newId } from "./db";
 import { handleInstagramPublishRequest } from "../routes/api.social.instagram.publish";
+import { randomSecret, sha256Hex } from "./instagram";
+import { handleTikTokUploadRequest } from "./tiktok-workflow";
+import { canReplaceVideoAssetSql } from "./content-asset-guard";
 
-const SERVER_INSTRUCTIONS = "Nex gestiona piezas, calendario y cuentas sociales del usuario autenticado. Para adjuntar un video usa start_video_upload, sube el archivo en partes base64 de 8 MiB con upload_video_part y termina con complete_video_upload. Las publicaciones públicas requieren petición y confirmación explícitas del usuario.";
+const SERVER_INSTRUCTIONS = "Crea una pieza con create_content, con su título y descripción. Adjunta el archivo con start_video_upload, envía las partes directamente por HTTP PUT desde el equipo que tiene el video y termina con complete_video_upload. Usa list_social_accounts para determinar la cuenta destino. Si el usuario aprueba la pieza, usa approve_video_content. Publicar o enviar un video a una plataforma externa requiere la confirmación explícita del usuario para esa cuenta.";
 const VIDEO_PART_SIZE = 8 * 1024 * 1024;
 const MAX_VIDEO_SIZE = 1024 * 1024 * 1024;
+
+const socialPlatform = z.enum(["instagram", "tiktok"]);
+type SocialPlatform = z.infer<typeof socialPlatform>;
 
 type NexMcpContext = {
   era: "legacy" | "modern";
@@ -24,6 +30,38 @@ type PendingVideoUpload = {
   content_type: string;
   file_size: number;
 };
+
+function expectedPartSize(fileSize: number, partNumber: number) {
+  const remaining = fileSize - VIDEO_PART_SIZE * (partNumber - 1);
+  return Math.max(0, Math.min(VIDEO_PART_SIZE, remaining));
+}
+
+async function saveVideoPart(upload: PendingVideoUpload, partNumber: number, data: ArrayBuffer | ReadableStream) {
+  const part = await getAssets().resumeMultipartUpload(upload.asset_key, upload.upload_id).uploadPart(partNumber, data);
+  return { part_number: part.partNumber, etag: part.etag };
+}
+
+export async function putMcpVideoPart(request: Request) {
+  const token = /^Bearer (nex_upload_[A-Za-z0-9_-]{43})$/.exec(request.headers.get("authorization") ?? "")?.[1];
+  if (!token) return Response.json({ error: "Usa el upload_token devuelto al iniciar la carga." }, { status: 401 });
+  const partNumber = Number(new URL(request.url).searchParams.get("part_number"));
+  if (!Number.isInteger(partNumber) || partNumber < 1) {
+    return Response.json({ error: "Indica un número de parte válido." }, { status: 400 });
+  }
+  try {
+    const upload = await getDb().prepare(
+      "SELECT id, content_id, asset_key, upload_id, filename, content_type, file_size FROM content_uploads WHERE id = ? AND created_at > datetime('now', '-1 hour')",
+    ).bind(await sha256Hex(token)).first<PendingVideoUpload>();
+    if (!upload) return Response.json({ error: "La autorización de carga venció o no es válida." }, { status: 401 });
+    const size = expectedPartSize(upload.file_size, partNumber);
+    if (!request.body || !size || Number(request.headers.get("content-length")) !== size) {
+      return Response.json({ error: "El cuerpo de la parte debe ser binario y coincidir con el tamaño esperado." }, { status: 400 });
+    }
+    return Response.json(await saveVideoPart(upload, partNumber, request.body));
+  } catch {
+    return Response.json({ error: "Nex no pudo guardar esta parte del video. Puedes volver a enviarla." }, { status: 502 });
+  }
+}
 
 function result(value: unknown): ToolResult {
   return { content: [{ type: "text", text: typeof value === "string" ? value : JSON.stringify(value) }] };
@@ -60,14 +98,23 @@ function userIdFrom(context: NexMcpContext) {
   return typeof value === "string" ? value : "";
 }
 
-async function readPublishResult(request: Request, userId: string, payload: Record<string, unknown>) {
-  const response = await handleInstagramPublishRequest(new Request(request.url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload),
-  }), userId);
-  const data = await response.json().catch(() => null);
-  return { status: response.status, data };
+async function runSocialAction(request: Request | undefined, userId: string, platform: SocialPlatform, payload: Record<string, unknown>) {
+  if (!request) return failure("La solicitud HTTP autenticada no está disponible.");
+  const handler = platform === "instagram" ? handleInstagramPublishRequest : handleTikTokUploadRequest;
+  try {
+    const response = await handler(new Request(request.url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    }), userId);
+    const data = await response.json().catch(() => null) as { status?: string; error?: string } | null;
+    if (!data || (!response.ok && !data.status)) {
+      return failure(data?.error || `Nex no pudo completar la operación (HTTP ${response.status}).`);
+    }
+    return result({ ...data, platform });
+  } catch {
+    return failure("Nex no pudo completar la operación con la plataforma.");
+  }
 }
 
 export function createNexMcpServer(context: NexMcpContext) {
@@ -121,7 +168,7 @@ export function createNexMcpServer(context: NexMcpContext) {
 
   server.registerTool("create_content", {
     title: "Create a Nex draft",
-    description: "Crea un borrador en la biblioteca de Nex. No lo publica en redes.",
+    description: "Crea un borrador con el título y la descripción de la pieza. Para Instagram, la descripción se usa como texto del Reel y el título se usa si no hay descripción.",
     inputSchema: z.object({
       title: z.string().trim().min(1).max(160),
       description: z.string().max(4000).optional(),
@@ -137,7 +184,7 @@ export function createNexMcpServer(context: NexMcpContext) {
       await getDb().prepare(
         "INSERT INTO content_items (id, user_id, title, description, script, type, channels) VALUES (?, ?, ?, ?, ?, ?, ?)",
       ).bind(contentId, userId, title, description?.trim() || null, script ?? null, type?.trim() || "video", channels?.trim() || null).run();
-      return result({ id: contentId, state: "borrador" });
+      return result({ id: contentId, state: "borrador", title, description: description?.trim() || null });
     } catch {
       return failure("Nex no pudo crear el borrador.");
     }
@@ -145,7 +192,7 @@ export function createNexMcpServer(context: NexMcpContext) {
 
   server.registerTool("start_video_upload", {
     title: "Start video upload",
-    description: "Inicia una carga multipart de un video MP4 o MOV para una pieza propia. Sube partes de 8 MiB y usa el upload_id devuelto en las siguientes llamadas.",
+    description: "Inicia la carga por partes de un MP4 o MOV. Desde el equipo que tiene el archivo, envía cada parte binaria por HTTP PUT a upload_url con ?part_number=N, Authorization: Bearer <upload_token> y su Content-Length. Guarda los etags y termina con complete_video_upload. El token dura una hora y sirve solo para esta carga. Si tu cliente ya automatiza base64, también puedes usar upload_video_part.",
     inputSchema: z.object({
       content_id: z.string().min(1),
       filename: z.string().trim().min(1).max(200),
@@ -165,10 +212,18 @@ export function createNexMcpServer(context: NexMcpContext) {
     const assetKey = `users/${userId}/content/${content_id}/${newId()}`;
     let multipart: Awaited<ReturnType<R2Bucket["createMultipartUpload"]>> | undefined;
     try {
+      const uploadToken = request ? "nex_upload_" + randomSecret() : null;
+      // A binary upload uses the one-way hash as the upload row ID.
+      const rowId = uploadToken ? await sha256Hex(uploadToken) : newId();
       multipart = await getAssets().createMultipartUpload(assetKey, { httpMetadata: { contentType: content_type } });
       await db.prepare("INSERT INTO content_uploads (id, content_id, user_id, asset_key, upload_id, filename, content_type, file_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-        .bind(newId(), content_id, userId, assetKey, multipart.uploadId, safeFilename, content_type, file_size).run();
-      return result({ upload_id: multipart.uploadId, part_size: VIDEO_PART_SIZE, part_count: Math.ceil(file_size / VIDEO_PART_SIZE) });
+        .bind(rowId, content_id, userId, assetKey, multipart.uploadId, safeFilename, content_type, file_size).run();
+      return result({
+        upload_id: multipart.uploadId,
+        part_size: VIDEO_PART_SIZE,
+        part_count: Math.ceil(file_size / VIDEO_PART_SIZE),
+        ...(request && uploadToken ? { upload_url: new URL("/api/mcp", request.url).href, upload_token: uploadToken } : {}),
+      });
     } catch {
       if (multipart) await multipart.abort().catch(() => undefined);
       return failure("Nex no pudo iniciar la carga del video.");
@@ -190,14 +245,12 @@ export function createNexMcpServer(context: NexMcpContext) {
     const pending = await getDb().prepare("SELECT id, content_id, asset_key, upload_id, filename, content_type, file_size FROM content_uploads WHERE upload_id = ? AND content_id = ? AND user_id = ?")
       .bind(upload_id, content_id, userId).first<PendingVideoUpload>();
     if (!pending) return failure("La carga no existe o no pertenece a la cuenta Nex autorizada.");
-    const partCount = Math.ceil(pending.file_size / VIDEO_PART_SIZE);
-    if (part_number > partCount) return failure("El número de parte supera el tamaño esperado del video.");
-    const expectedLength = part_number < partCount ? VIDEO_PART_SIZE : pending.file_size - VIDEO_PART_SIZE * (partCount - 1);
+    const expectedLength = expectedPartSize(pending.file_size, part_number);
+    if (!expectedLength) return failure("El número de parte supera el tamaño esperado del video.");
     const body = decodeBase64(data_base64);
     if (!body || body.byteLength !== expectedLength) return failure("La parte no es base64 válido o su tamaño no coincide con el esperado.");
     try {
-      const part = await getAssets().resumeMultipartUpload(pending.asset_key, pending.upload_id).uploadPart(part_number, body);
-      return result({ part_number: part.partNumber, etag: part.etag });
+      return result(await saveVideoPart(pending, part_number, body));
     } catch {
       return failure("Nex no pudo guardar esta parte del video.");
     }
@@ -223,9 +276,10 @@ export function createNexMcpServer(context: NexMcpContext) {
       return failure("Incluye todas las partes, en orden y sin duplicados.");
     }
 
-    const current = await db.prepare("SELECT asset_key FROM content_items WHERE id = ? AND user_id = ?")
-      .bind(content_id, userId).first<{ asset_key: string | null }>();
+    const current = await db.prepare(`SELECT asset_key, (${canReplaceVideoAssetSql}) AS can_replace FROM content_items WHERE id = ? AND user_id = ?`)
+      .bind(content_id, userId).first<{ asset_key: string | null; can_replace: number }>();
     if (!current) return failure("No se encontró la pieza de contenido.");
+    if (!current.can_replace) return failure("Espera a que termine el envío a la red social para reemplazar el video.");
     let object: R2Object;
     try {
       object = await getAssets().resumeMultipartUpload(pending.asset_key, pending.upload_id).complete(
@@ -243,8 +297,8 @@ export function createNexMcpServer(context: NexMcpContext) {
     let completed: Awaited<ReturnType<typeof db.batch>>;
     try {
       completed = await db.batch([
-        db.prepare("UPDATE content_items SET asset_key = ?, asset_name = ?, asset_content_type = ?, asset_size = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ?")
-          .bind(pending.asset_key, pending.filename, pending.content_type, object.size, content_id, userId),
+        db.prepare(`UPDATE content_items SET asset_key = ?, asset_name = ?, asset_content_type = ?, asset_size = ?, updated_at = datetime('now') WHERE id = ? AND user_id = ? AND asset_key IS ? AND ${canReplaceVideoAssetSql}`)
+          .bind(pending.asset_key, pending.filename, pending.content_type, object.size, content_id, userId, current.asset_key),
         db.prepare("DELETE FROM content_uploads WHERE id = ? AND user_id = ?").bind(pending.id, userId),
       ]);
     } catch {
@@ -254,7 +308,7 @@ export function createNexMcpServer(context: NexMcpContext) {
     }
     if (completed[0]?.meta.changes !== 1) {
       await getAssets().delete(pending.asset_key).catch(() => undefined);
-      return failure("No se pudo adjuntar el video a la pieza.");
+      return failure("La pieza cambió o se está enviando a una red social. Inicia una nueva carga cuando esté lista.");
     }
     if (current.asset_key && current.asset_key !== pending.asset_key) await getAssets().delete(current.asset_key).catch(() => undefined);
     return result({ ok: true, content_id, filename: pending.filename, file_size: object.size });
@@ -313,9 +367,76 @@ export function createNexMcpServer(context: NexMcpContext) {
     }
   });
 
+  server.registerTool("list_social_accounts", {
+    title: "List connected social accounts",
+    description: "Lista las cuentas de Instagram y TikTok vinculadas a este estudio. Usa el identificador id y la plataforma de la cuenta elegida al enviar un video.",
+    inputSchema: z.object({ platform: socialPlatform.optional() }).strict(),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    scopeChallenge: requireScopes("nex:read"),
+  }, async ({ platform }) => {
+    try {
+      const { results } = await getDb().prepare(
+        "SELECT id, lower(platform) AS platform, handle, status, token_expires_at FROM social_accounts WHERE user_id = ? AND platform IN ('Instagram', 'TikTok') AND status = 'conectada' AND external_account_id IS NOT NULL AND (? IS NULL OR lower(platform) = ?) ORDER BY platform, connected_at DESC",
+      ).bind(userId, platform ?? null, platform ?? null).all();
+      return result(results ?? []);
+    } catch {
+      return failure("Nex no pudo cargar las cuentas sociales.");
+    }
+  });
+
+  server.registerTool("approve_video_content", {
+    title: "Approve a video in Nex",
+    description: "Marca como aprobada una pieza con video adjunto cuando el usuario haya revisado y aprobado esa pieza. Solo cambia el estado dentro de Nex. No envía el archivo a redes.",
+    inputSchema: z.object({ content_id: z.string().min(1), confirm_approve: z.literal(true) }).strict(),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    scopeChallenge: requireScopes("nex:publish"),
+  }, async ({ content_id }) => {
+    try {
+      const db = getDb();
+      await db.prepare(
+        "UPDATE content_items SET state = 'aprobada', updated_at = datetime('now') WHERE id = ? AND user_id = ? AND state IN ('borrador', 'en_revision') AND asset_key IS NOT NULL AND asset_content_type IN ('video/mp4', 'video/quicktime')",
+      ).bind(content_id, userId).run();
+      const content = await db.prepare(
+        "SELECT id, title, description, state FROM content_items WHERE id = ? AND user_id = ? AND asset_key IS NOT NULL AND asset_content_type IN ('video/mp4', 'video/quicktime')",
+      ).bind(content_id, userId).first<{ id: string; title: string; description: string | null; state: string }>();
+      if (!content) return failure("Primero adjunta un video MP4 o MOV a la pieza.");
+      if (content.state !== "aprobada" && content.state !== "publicada") {
+        return failure("La pieza debe estar en borrador o en revisión para aprobarla.");
+      }
+      return result(content);
+    } catch {
+      return failure("Nex no pudo aprobar el video.");
+    }
+  });
+
+  server.registerTool("publish_social_video", {
+    title: "Send video to a connected social account",
+    description: "Envía una pieza aprobada con video a la cuenta destino. En Instagram inicia la publicación del Reel; en TikTok envía el archivo a la bandeja de la cuenta para que el usuario añada el texto y publique en la app. Solo usar tras confirmación explícita para la pieza y cuenta elegidas. Guarda el jobId y usa check_social_publish.",
+    inputSchema: z.object({
+      platform: socialPlatform,
+      content_id: z.string().min(1),
+      account_id: z.string().min(1),
+      confirm_publish: z.literal(true),
+    }).strict(),
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+    scopeChallenge: requireScopes("nex:publish"),
+  }, async ({ platform, content_id, account_id }) =>
+    runSocialAction(request, userId, platform, { action: "start", contentId: content_id, accountId: account_id }),
+  );
+
+  server.registerTool("check_social_publish", {
+    title: "Check social video status",
+    description: "Consulta una operación por plataforma y job_id. En Instagram también finaliza la publicación ya confirmada al quedar listo el Reel. En TikTok, awaiting_user indica que el usuario debe abrir TikTok para completar la publicación.",
+    inputSchema: z.object({ platform: socialPlatform, job_id: z.string().min(1) }).strict(),
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    scopeChallenge: requireScopes("nex:publish"),
+  }, async ({ platform, job_id }) =>
+    runSocialAction(request, userId, platform, { action: "check", jobId: job_id }),
+  );
+
   server.registerTool("publish_instagram_reel", {
     title: "Publish an Instagram Reel",
-    description: "Inicia la publicación de un Reel en una cuenta de Instagram conectada. Solo usar si el usuario pidió publicar esta pieza y confirmó que se haga pública. Requiere contenido aprobado, video MP4/MOV cargado en Nex y confirm_publish=true.",
+    description: "Inicia la publicación de un Reel aprobado en la cuenta de Instagram elegida. Usa la descripción de la pieza como texto del Reel y el título si no hay descripción. Solo llamar si el usuario pidió y confirmó publicar la pieza en esa cuenta.",
     inputSchema: z.object({
       content_id: z.string().min(1),
       account_id: z.string().min(1),
@@ -323,16 +444,9 @@ export function createNexMcpServer(context: NexMcpContext) {
     }).strict(),
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     scopeChallenge: requireScopes("nex:publish"),
-  }, async ({ content_id, account_id, confirm_publish }) => {
-    if (!confirm_publish || !request) return failure("Se requiere una petición explícita de publicación y una solicitud HTTP autenticada.");
-    try {
-      const response = await readPublishResult(request, userId, { action: "start", contentId: content_id, accountId: account_id });
-      if (response.status >= 400) return failure(`Nex no pudo iniciar la publicación (HTTP ${response.status}).`);
-      return result(response.data);
-    } catch {
-      return failure("Nex no pudo iniciar la publicación.");
-    }
-  });
+  }, async ({ content_id, account_id }) =>
+    runSocialAction(request, userId, "instagram", { action: "start", contentId: content_id, accountId: account_id }),
+  );
 
   server.registerTool("check_instagram_publish", {
     title: "Check Instagram publishing status",
@@ -340,16 +454,7 @@ export function createNexMcpServer(context: NexMcpContext) {
     inputSchema: z.object({ job_id: z.string().min(1) }).strict(),
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     scopeChallenge: requireScopes("nex:publish"),
-  }, async ({ job_id }) => {
-    if (!request) return failure("La solicitud HTTP autenticada no está disponible.");
-    try {
-      const response = await readPublishResult(request, userId, { action: "check", jobId: job_id });
-      if (response.status >= 400) return failure(`Nex no pudo consultar la publicación (HTTP ${response.status}).`);
-      return result(response.data);
-    } catch {
-      return failure("Nex no pudo consultar el estado de publicación.");
-    }
-  });
+  }, async ({ job_id }) => runSocialAction(request, userId, "instagram", { action: "check", jobId: job_id }));
 
   return server;
 }

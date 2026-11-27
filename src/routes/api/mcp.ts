@@ -7,6 +7,7 @@ export const Route = createFileRoute("/api/mcp")({
     handlers: {
       POST: ({ request }) => handleMcpRequest(request),
       GET: ({ request }) => handleMcpRequest(request),
+      PUT: ({ request }) => handleMcpRequest(request),
       OPTIONS: ({ request }) => handleMcpOptionsRequest(request),
     },
   },

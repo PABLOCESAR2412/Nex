@@ -9,6 +9,7 @@ export const Route = createFileRoute("/api/social/instagram/connect")({
       GET: async ({ request }) => {
         const session = await getCurrentSession();
         if (!session) return Response.redirect(new URL("/login", request.url), 302);
+        if (session.passwordChangeRequired) return Response.redirect(new URL("/password", request.url), 302);
 
         try {
           const config = instagramConfig(new URL(request.url).origin);
@@ -24,6 +25,7 @@ export const Route = createFileRoute("/api/social/instagram/connect")({
           authorization.searchParams.set("client_id", config.appId);
           authorization.searchParams.set("redirect_uri", config.redirectUri);
           authorization.searchParams.set("response_type", "code");
+          authorization.searchParams.set("force_reauth", "true");
           authorization.searchParams.set("scope", "instagram_business_basic,instagram_business_content_publish");
           authorization.searchParams.set("state", state);
           return Response.redirect(authorization.toString(), 302);

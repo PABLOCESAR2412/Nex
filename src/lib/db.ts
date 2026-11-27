@@ -21,6 +21,9 @@ export type RuntimeEnv = {
   INSTAGRAM_APP_SECRET?: string;
   INSTAGRAM_TOKEN_ENCRYPTION_KEY?: string;
   INSTAGRAM_GRAPH_VERSION?: string;
+  TIKTOK_CLIENT_KEY?: string;
+  TIKTOK_CLIENT_SECRET?: string;
+  TIKTOK_TOKEN_ENCRYPTION_KEY?: string;
   PUBLIC_APP_URL?: string;
   NEX_ADMIN_EMAILS?: string;
 };

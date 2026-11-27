@@ -5,7 +5,7 @@ import {
 } from "@modelcontextprotocol/server";
 import { createMcpHandler } from "@modelcontextprotocol/server";
 import { createServerOnlyFn } from "@tanstack/react-start";
-import { createNexMcpServer } from "./mcp-server";
+import { createNexMcpServer, putMcpVideoPart } from "./mcp-server";
 import { resolveMcpAccessToken } from "./mcp-oauth";
 
 const OPENAI_ORIGINS = new Set(["https://chatgpt.com", "https://chat.openai.com"]);
@@ -14,12 +14,16 @@ const TOOL_SCOPES: Record<string, string[]> = {
   get_profile: ["nex:read"],
   list_content: ["nex:read"],
   list_instagram_accounts: ["nex:read"],
+  list_social_accounts: ["nex:read"],
   create_content: ["nex:write"],
   start_video_upload: ["nex:write"],
   upload_video_part: ["nex:write"],
   complete_video_upload: ["nex:write"],
   abort_video_upload: ["nex:write"],
   schedule_content: ["nex:write"],
+  approve_video_content: ["nex:publish"],
+  publish_social_video: ["nex:publish"],
+  check_social_publish: ["nex:publish"],
   publish_instagram_reel: ["nex:publish"],
   check_instagram_publish: ["nex:publish"],
 };
@@ -30,7 +34,7 @@ function withNoStore(response: Response, corsOrigin?: string) {
   headers.set("x-content-type-options", "nosniff");
   if (corsOrigin) {
     headers.set("access-control-allow-origin", corsOrigin);
-    headers.set("access-control-allow-methods", "GET, POST, OPTIONS");
+    headers.set("access-control-allow-methods", "GET, POST, PUT, OPTIONS");
     headers.set("access-control-allow-headers", "accept, authorization, content-type, mcp-method, mcp-name, mcp-protocol-version, mcp-session-id");
     headers.set("access-control-expose-headers", "www-authenticate, mcp-protocol-version, mcp-session-id");
     headers.set("vary", "Origin");
@@ -112,6 +116,10 @@ export const handleMcpRequest = createServerOnlyFn(async (request: Request) => {
       status: 403,
       headers: { "cache-control": "no-store", "x-content-type-options": "nosniff" },
     });
+  }
+
+  if (request.method === "PUT") {
+    return withNoStore(await putMcpVideoPart(request), originHeader ?? undefined);
   }
 
   const resource = new URL("/api/mcp", origin);

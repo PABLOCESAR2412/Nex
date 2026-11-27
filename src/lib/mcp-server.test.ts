@@ -1,12 +1,15 @@
 import { createMcpHandler, type AuthInfo } from "@modelcontextprotocol/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createNexMcpServer } from "./mcp-server";
+import { createNexMcpServer, putMcpVideoPart } from "./mcp-server";
+import { handleMcpRequest } from "./mcp-http";
+import { sha256Hex } from "./instagram";
 
 const db = vi.hoisted(() => ({
   all: vi.fn().mockResolvedValue({ results: [] }),
   first: vi.fn().mockResolvedValue(null),
   run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
   batch: vi.fn().mockResolvedValue([{ meta: { changes: 1 } }, { meta: { changes: 1 } }]),
+  bind: vi.fn(),
 }));
 
 const assets = vi.hoisted(() => ({
@@ -15,9 +18,14 @@ const assets = vi.hoisted(() => ({
   delete: vi.fn().mockResolvedValue(undefined),
 }));
 
+const providers = vi.hoisted(() => ({
+  instagram: vi.fn(),
+  tiktok: vi.fn(),
+}));
+
 vi.mock("./db", () => ({
   getDb: () => ({
-    prepare: () => ({ bind: () => ({ all: db.all, first: db.first, run: db.run }) }),
+    prepare: () => ({ bind: db.bind }),
     batch: db.batch,
   }),
   getAssets: () => assets,
@@ -25,7 +33,11 @@ vi.mock("./db", () => ({
 }));
 
 vi.mock("../routes/api.social.instagram.publish", () => ({
-  handleInstagramPublishRequest: vi.fn(),
+  handleInstagramPublishRequest: providers.instagram,
+}));
+
+vi.mock("./tiktok-workflow", () => ({
+  handleTikTokUploadRequest: providers.tiktok,
 }));
 
 const RESOURCE = new URL("https://nex.example/api/mcp");
@@ -68,14 +80,18 @@ async function readMcpResponse(response: Response) {
   throw new Error("MCP response did not include a JSON-RPC result.");
 }
 
-async function callTool(name: string, args: unknown, id: number) {
+async function toolResponse(name: string, args: unknown, id: number, scopes = SCOPES) {
   const handler = createMcpHandler((context) => createNexMcpServer(context), { legacy: "stateless", responseMode: "auto" });
-  const response = await handler.fetch(request({
+  return handler.fetch(request({
     jsonrpc: "2.0",
     id,
     method: "tools/call",
     params: { name, arguments: args },
-  }), { authInfo: auth(SCOPES) });
+  }), { authInfo: auth(scopes) });
+}
+
+async function callTool(name: string, args: unknown, id: number) {
+  const response = await toolResponse(name, args, id);
   const body = await readMcpResponse(response) as { result?: { content?: Array<{ text?: string }> } };
   const text = body.result?.content?.[0]?.text;
   if (!text) throw new Error(`MCP tool ${name} returned no text result.`);
@@ -83,7 +99,11 @@ async function callTool(name: string, args: unknown, id: number) {
 }
 
 describe("Nex MCP server", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    db.bind.mockReturnValue({ all: db.all, first: db.first, run: db.run });
+    db.first.mockReset().mockResolvedValue(null);
+  });
   afterEach(() => vi.unstubAllGlobals());
 
   it("serves MCP tools through the official stateless HTTP handler", async () => {
@@ -133,6 +153,10 @@ describe("Nex MCP server", () => {
     expect(names).toContain("start_video_upload");
     expect(names).toContain("upload_video_part");
     expect(names).toContain("complete_video_upload");
+    expect(names).toContain("list_social_accounts");
+    expect(names).toContain("approve_video_content");
+    expect(names).toContain("publish_social_video");
+    expect(names).toContain("check_social_publish");
     expect(names).not.toContain("upload_content_from_url");
   });
 
@@ -150,7 +174,7 @@ describe("Nex MCP server", () => {
       .mockResolvedValueOnce({ id: "content-test-id" })
       .mockResolvedValueOnce(pending)
       .mockResolvedValueOnce(pending)
-      .mockResolvedValueOnce({ asset_key: null });
+      .mockResolvedValueOnce({ asset_key: null, can_replace: 1 });
     assets.createMultipartUpload.mockResolvedValue({ uploadId: "multipart-test", abort: vi.fn() });
     assets.resumeMultipartUpload.mockReturnValue({
       uploadPart: vi.fn().mockResolvedValue({ partNumber: 1, etag: "etag-1" }),
@@ -182,5 +206,138 @@ describe("Nex MCP server", () => {
     expect(completed).toMatchObject({ ok: true, content_id: "content-test-id", filename: "reel.mp4", file_size: 1 });
     expect(assets.resumeMultipartUpload).toHaveBeenCalledTimes(2);
     expect(db.batch).toHaveBeenCalledTimes(1);
+  });
+
+  it("creates a captioned draft, attaches binary video, and sends it to the selected accounts", async () => {
+    const contentId = "test-upload-row-id";
+    const draft = { id: contentId, title: "Un pulpo curioso", description: "Tres datos. #Pulpo" };
+    const pending = {
+      id: "hashed-upload-token",
+      content_id: contentId,
+      asset_key: "users/user-test-id/content/test-upload-row-id/video-object",
+      upload_id: "multipart-test",
+      filename: "pulpo.mp4",
+      content_type: "video/mp4",
+      file_size: 1,
+    };
+    db.first
+      .mockResolvedValueOnce({ id: contentId })
+      .mockResolvedValueOnce(pending)
+      .mockResolvedValueOnce(pending)
+      .mockResolvedValueOnce({ asset_key: null, can_replace: 1 })
+      .mockResolvedValueOnce({ ...draft, state: "aprobada" });
+    assets.createMultipartUpload.mockResolvedValue({ uploadId: pending.upload_id, abort: vi.fn() });
+    const uploadPart = vi.fn().mockResolvedValue({ partNumber: 1, etag: "etag-1" });
+    assets.resumeMultipartUpload.mockReturnValue({
+      uploadPart,
+      complete: vi.fn().mockResolvedValue({ size: 1 }),
+    });
+    db.all.mockResolvedValueOnce({
+      results: [
+        { id: "ig-first", platform: "instagram", handle: "@ig1" },
+        { id: "ig-second", platform: "instagram", handle: "@ig2" },
+        { id: "tt-first", platform: "tiktok", handle: "@tiktok1" },
+      ],
+    });
+    providers.instagram.mockImplementation(async (request: Request) => {
+      const { action } = await request.clone().json() as { action: string };
+      return Response.json({ jobId: "ig-job", status: action === "start" ? "processing" : "published" });
+    });
+    providers.tiktok.mockImplementation(async (request: Request) => {
+      const { action } = await request.clone().json() as { action: string };
+      return Response.json({ jobId: "tt-job", status: action === "start" ? "processing" : "awaiting_user", caption: draft.description });
+    });
+
+    const created = await callTool("create_content", { title: draft.title, description: draft.description }, 8);
+    expect(created).toMatchObject({ ...draft, state: "borrador" });
+    expect(db.bind).toHaveBeenCalledWith(contentId, "user-test-id", draft.title, draft.description, null, "video", null);
+    const started = await callTool("start_video_upload", {
+      content_id: contentId,
+      filename: pending.filename,
+      content_type: pending.content_type,
+      file_size: pending.file_size,
+    }, 9);
+    expect(started).toMatchObject({ upload_id: pending.upload_id, upload_url: RESOURCE.href, upload_token: expect.stringMatching(/^nex_upload_/u) });
+    expect(db.bind).toHaveBeenCalledWith(await sha256Hex(String(started.upload_token)), contentId, "user-test-id", expect.any(String), pending.upload_id, pending.filename, pending.content_type, pending.file_size);
+
+    const uploadUrl = new URL(String(started.upload_url));
+    uploadUrl.searchParams.set("part_number", "1");
+    const binaryPart = await handleMcpRequest(new Request(uploadUrl, {
+      method: "PUT",
+      headers: { authorization: `Bearer ${started.upload_token}`, "content-length": "1" },
+      body: new Uint8Array([7]),
+    }));
+    expect(binaryPart.status).toBe(200);
+    expect(binaryPart.headers.get("cache-control")).toBe("no-store");
+    expect(await binaryPart.json()).toEqual({ part_number: 1, etag: "etag-1" });
+    expect(uploadPart).toHaveBeenCalledWith(1, expect.any(ReadableStream));
+
+    expect(await callTool("complete_video_upload", {
+      content_id: contentId,
+      upload_id: pending.upload_id,
+      parts: [{ part_number: 1, etag: "etag-1" }],
+    }, 10)).toMatchObject({ ok: true, content_id: contentId });
+    expect(await callTool("approve_video_content", { content_id: contentId, confirm_approve: true }, 11))
+      .toEqual({ ...draft, state: "aprobada" });
+    expect(await callTool("list_social_accounts", {}, 12)).toEqual([
+      { id: "ig-first", platform: "instagram", handle: "@ig1" },
+      { id: "ig-second", platform: "instagram", handle: "@ig2" },
+      { id: "tt-first", platform: "tiktok", handle: "@tiktok1" },
+    ]);
+
+    for (const [platform, accountId, jobId, status, handler] of [
+      ["instagram", "ig-second", "ig-job", "published", providers.instagram],
+      ["tiktok", "tt-first", "tt-job", "awaiting_user", providers.tiktok],
+    ] as const) {
+      expect(await callTool("publish_social_video", {
+        platform,
+        content_id: contentId,
+        account_id: accountId,
+        confirm_publish: true,
+      }, 13)).toMatchObject({ platform, jobId, status: "processing" });
+      const [request, user] = handler.mock.calls[0] ?? [];
+      expect(user).toBe("user-test-id");
+      expect(await request.clone().json()).toEqual({ action: "start", contentId, accountId });
+      expect(await callTool("check_social_publish", { platform, job_id: jobId }, 14)).toMatchObject({ platform, jobId, status });
+    }
+  });
+
+  it("requires publish scope and explicit confirmation before invoking any social provider", async () => {
+    const input = { platform: "tiktok", content_id: "video", account_id: "account", confirm_publish: true };
+    const forbidden = await toolResponse("publish_social_video", input, 15, ["nex:write"]);
+    expect(forbidden.status).toBe(403);
+    const unconfirmed = await toolResponse("publish_social_video", { ...input, confirm_publish: false }, 16);
+    expect(await readMcpResponse(unconfirmed)).toMatchObject({ result: { isError: true } });
+    expect(providers.instagram).not.toHaveBeenCalled();
+    expect(providers.tiktok).not.toHaveBeenCalled();
+  });
+
+  it("requires a valid binary upload token tied to an active upload", async () => {
+    const createRequest = (token: string) => new Request("https://nex.example/api/mcp?part_number=1", {
+      method: "PUT",
+      headers: { authorization: `Bearer ${token}`, "content-length": "1" },
+      body: new Uint8Array([7]),
+    });
+    expect((await putMcpVideoPart(createRequest("nex_access_unauthorized"))).status).toBe(401);
+    expect(db.first).not.toHaveBeenCalled();
+    expect((await putMcpVideoPart(createRequest(`nex_upload_${"a".repeat(43)}`))).status).toBe(401);
+    expect(assets.resumeMultipartUpload).not.toHaveBeenCalled();
+  });
+
+  it("returns the reason a provider could not start and preserves reviewable final states", async () => {
+    providers.instagram
+      .mockResolvedValueOnce(Response.json({ error: "La autorización de Instagram venció." }, { status: 409 }))
+      .mockResolvedValueOnce(Response.json({ jobId: "ig-job", status: "needs_review", error: "Revisa Instagram." }, { status: 502 }));
+    const response = await toolResponse("publish_social_video", {
+      platform: "instagram",
+      content_id: "video",
+      account_id: "account",
+      confirm_publish: true,
+    }, 17);
+    expect(await readMcpResponse(response)).toMatchObject({
+      result: { isError: true, content: [{ type: "text", text: "La autorización de Instagram venció." }] },
+    });
+    expect(await callTool("check_social_publish", { platform: "instagram", job_id: "ig-job" }, 18))
+      .toMatchObject({ status: "needs_review", error: "Revisa Instagram." });
   });
 });

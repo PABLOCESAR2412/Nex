@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Icon, PageIntro, PrototypeNotice, StudioShell } from "./studio-shell";
 import { SkeletonRows } from "./loading-skeletons";
 import { CONTENT_STATES, type ContentItem, type ContentState, createContentFn, deleteContentFn, listContentFn, updateContentFn } from "../lib/content";
-import { listInstagramAccountsFn, type InstagramAccountSummary } from "../lib/social";
+import { listSocialAccountsFn, type SocialAccountSummary, type SocialPlatform } from "../lib/social";
 import { listRegisteredUsersFn, type RegisteredUsersResult } from "../lib/user-admin-client";
 
 const stateLabels: Record<ContentState, string> = {
@@ -163,7 +163,14 @@ export function CalendarPage() {
   </StudioShell>;
 }
 
-function ContentEditor({ item, instagramAccounts, onChanged, onDeleted }: { item: ContentItem; instagramAccounts: InstagramAccountSummary[]; onChanged: () => Promise<void>; onDeleted: (assetCleanupPending: boolean) => Promise<void> }) {
+function accountLabel(account: SocialAccountSummary, accounts: SocialAccountSummary[]) {
+  const duplicate = accounts.some((other) => other.id !== account.id && other.platform === account.platform && other.handle === account.handle);
+  return duplicate ? `${account.handle} · ${account.id.slice(-6)}` : account.handle;
+}
+
+type PublicationResult = { jobId?: string; status?: string; error?: string; caption?: string };
+
+function ContentEditor({ item, accounts, onChanged, onDeleted }: { item: ContentItem; accounts: SocialAccountSummary[]; onChanged: () => Promise<void>; onDeleted: (assetCleanupPending: boolean) => Promise<void> }) {
   const [title, setTitle] = useState(item.title);
   const [description, setDescription] = useState(item.description ?? "");
   const [script, setScript] = useState(item.script ?? "");
@@ -173,15 +180,16 @@ function ContentEditor({ item, instagramAccounts, onChanged, onDeleted }: { item
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const [publishAccountId, setPublishAccountId] = useState(instagramAccounts[0]?.id ?? "");
+  const [publishAccountId, setPublishAccountId] = useState("");
   const [progress, setProgress] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!instagramAccounts.some((account) => account.id === publishAccountId)) {
-      setPublishAccountId(instagramAccounts[0]?.id ?? "");
-    }
-  }, [instagramAccounts, publishAccountId]);
+  const [tiktokCaption, setTikTokCaption] = useState<string | null>(null);
+  const validAccounts = accounts.filter((account) => account.platform === "TikTok"
+    ? ["video/mp4", "video/quicktime", "video/webm"].includes(item.asset_content_type ?? "")
+    : ["video/mp4", "video/quicktime"].includes(item.asset_content_type ?? ""));
+  const selectedAccount = validAccounts.find((account) => account.id === publishAccountId)
+    ?? (validAccounts.length === 1 ? validAccounts[0] : undefined);
+  const [publicationJobs, setPublicationJobs] = useState<Record<string, string>>({});
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -245,46 +253,63 @@ function ContentEditor({ item, instagramAccounts, onChanged, onDeleted }: { item
     }
   }
 
-  async function publishToInstagram() {
-    const account = instagramAccounts.find((candidate) => candidate.id === publishAccountId);
-    if (!account) {
-      setMessage("Conecta una cuenta de Instagram desde Cuentas antes de publicar.");
+  async function publishVideo() {
+    const account = selectedAccount;
+    if (!account) return;
+    const knownJob = publicationJobs[account.id];
+    const isTikTok = account.platform === "TikTok";
+    if (!knownJob && (title !== item.title || description !== (item.description ?? ""))) {
+      setMessage("Guarda el título y la descripción antes de enviar el video.");
       return;
     }
-    if (!window.confirm("¿Publicar ahora “" + item.title + "” como Reel en " + account.handle + "? Será visible para esa cuenta.")) return;
+    const destination = `${accountLabel(account, accounts)} en ${account.platform}`;
+    const action = isTikTok ? "Enviar a la bandeja de" : "Publicar como Reel para";
+    if (!knownJob && !window.confirm(`¿${action} ${destination} el video “${item.title}”?`)) return;
     setMessage(null);
+    setTikTokCaption(null);
     setPublishing(true);
     try {
-      const startResponse = await fetch("/api/social/instagram/publish", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "start", contentId: item.id, accountId: account.id }),
-      });
-      const start = await startResponse.json() as { jobId?: string; error?: string };
-      if (!startResponse.ok || !start.jobId) throw new Error(start.error ?? "No se pudo iniciar la publicación.");
-
-      for (let attempt = 0; attempt < 48; attempt++) {
-        setMessage("Instagram está preparando el Reel…");
-        await new Promise((resolve) => setTimeout(resolve, 2500));
-        const checkResponse = await fetch("/api/social/instagram/publish", {
+      const endpoint = isTikTok ? "/api/social/tiktok/upload" : "/api/social/instagram/publish";
+      async function requestPublication(body: object) {
+        const response = await fetch(endpoint, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "check", jobId: start.jobId }),
+          body: JSON.stringify(body),
         });
-        const check = await checkResponse.json() as { status?: string; error?: string };
-        if (check.status === "published") {
+        const result = await response.json() as PublicationResult;
+        if (!response.ok || !result.jobId) throw new Error(result.error ?? `No se pudo consultar ${account!.platform}.`);
+        return result;
+      }
+      let result = await requestPublication(knownJob
+        ? { action: "check", jobId: knownJob }
+        : { action: "start", contentId: item.id, accountId: account.id });
+      const jobId = result.jobId!;
+      setPublicationJobs((jobs) => ({ ...jobs, [account.id]: jobId }));
+
+      for (let attempt = 0; attempt <= 24; attempt++) {
+        if (result.status === "published") {
           setState("publicada");
           await onChanged();
-          setMessage("Reel publicado en " + account.handle + ".");
+          setMessage(`Video publicado para ${destination}.`);
           return;
         }
-        if (check.status === "failed" || check.status === "needs_review" || !checkResponse.ok) {
-          throw new Error(check.error ?? "Instagram no pudo completar la publicación.");
+        if (result.status === "awaiting_user") {
+          setTikTokCaption(result.caption ?? null);
+          setMessage(`Video en la bandeja de ${destination}. Abre la notificación, revisa el texto y publica desde TikTok.`);
+          return;
         }
+        if (result.status === "failed") setPublicationJobs(({ [account.id]: _, ...jobs }) => jobs);
+        if (result.status === "failed" || result.status === "needs_review") {
+          throw new Error(result.error ?? `${account.platform} no pudo completar el envío.`);
+        }
+        if (attempt === 24) break;
+        setMessage(`${account.platform} está procesando el video…`);
+        await new Promise((resolve) => setTimeout(resolve, isTikTok ? 4000 : 2500));
+        result = await requestPublication({ action: "check", jobId });
       }
-      setMessage("El Reel sigue procesándose en Instagram. Puedes volver a intentar revisar su estado.");
+      setMessage(`El video sigue procesándose en ${account.platform}. Puedes consultar su estado.`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "No se pudo publicar en Instagram.");
+      setMessage(error instanceof Error ? error.message : "No se pudo enviar el video.");
     } finally {
       setPublishing(false);
     }
@@ -317,15 +342,19 @@ function ContentEditor({ item, instagramAccounts, onChanged, onDeleted }: { item
         <div className="content-row-actions">
           <button className="primary-button" type="submit" disabled={saving || uploading}>{saving ? "Guardando…" : "Guardar cambios"}</button>
           <label className="quiet-button file-button">{item.asset_key ? "Reemplazar archivo" : "Adjuntar archivo"}<input type="file" accept="video/mp4,video/webm,video/quicktime,image/jpeg,image/png,image/webp,application/pdf" disabled={uploading || saving} onChange={(e) => { const file = e.currentTarget.files?.[0]; if (file) void upload(file); e.currentTarget.value = ""; }} /></label>
-          {item.state === "aprobada" && ["video/mp4", "video/quicktime"].includes(item.asset_content_type ?? "") && instagramAccounts.length > 0 && <div className="publish-social-control">
-            {instagramAccounts.length > 1 && <label className="sr-only">Cuenta de Instagram<select value={publishAccountId} onChange={(e) => setPublishAccountId(e.target.value)} disabled={publishing}>{instagramAccounts.map((account) => <option key={account.id} value={account.id}>{account.handle}</option>)}</select></label>}
-            <button className="quiet-button" type="button" disabled={saving || uploading || publishing} onClick={() => void publishToInstagram()}>{publishing ? "Publicando…" : "Publicar Reel"}</button>
+          {["aprobada", "publicada"].includes(item.state) && validAccounts.length > 0 && <div className="publish-social-control">
+            <label>Cuenta de destino<select value={selectedAccount?.id ?? ""} onChange={(e) => { setPublishAccountId(e.target.value); setTikTokCaption(null); setMessage(null); }} disabled={publishing}>
+              {validAccounts.length > 1 && <option value="">Selecciona una cuenta</option>}
+              {validAccounts.map((account) => <option key={account.id} value={account.id}>{account.platform} · {accountLabel(account, accounts)}</option>)}
+            </select></label>
+            <button className="quiet-button" type="button" disabled={!selectedAccount || saving || uploading || publishing} onClick={() => void publishVideo()}>{publishing ? "Procesando…" : selectedAccount && publicationJobs[selectedAccount.id] ? "Consultar estado" : selectedAccount?.platform === "TikTok" ? "Enviar a TikTok" : selectedAccount ? "Publicar Reel" : "Enviar video"}</button>
           </div>}
           <button className="quiet-button delete-content-button" type="button" disabled={saving || uploading || publishing} onClick={() => void remove()}>Eliminar pieza</button>
         </div>
       </form>
       {uploading && <div className="upload-progress" role="status"><progress value={progress} max={100} />Subiendo archivo… {progress}%</div>}
       {message && <p className="content-feedback" role="status">{message}</p>}
+      {tiktokCaption && <label className="content-edit-form content-description">Texto para TikTok<textarea readOnly rows={3} value={tiktokCaption} /></label>}
       {item.asset_key && <div className="content-asset">
         {item.asset_content_type?.startsWith("video/") ? <video src={assetUrl} controls preload="metadata" /> : item.asset_content_type?.startsWith("image/") ? <a href={assetUrl} target="_blank" rel="noreferrer"><img src={assetUrl} alt={item.asset_name ?? item.title} /></a> : <a href={assetUrl}>{item.asset_name ?? "Abrir archivo"}</a>}
         <span>{item.asset_name} · {formatFileSize(item.asset_size)}</span>
@@ -341,7 +370,7 @@ export function LibraryPage() {
   const [title, setTitle] = useState("");
   const [channels, setChannels] = useState("");
   const [creating, setCreating] = useState(false);
-  const [instagramAccounts, setInstagramAccounts] = useState<InstagramAccountSummary[]>([]);
+  const [socialAccounts, setSocialAccounts] = useState<SocialAccountSummary[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
   async function refresh() {
@@ -356,8 +385,8 @@ export function LibraryPage() {
       .then((result) => { if (!cancelled) setItems(result); })
       .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : "No se pudo cargar la biblioteca."); })
       .finally(() => { if (!cancelled) setLoading(false); });
-    listInstagramAccountsFn()
-      .then((result) => { if (!cancelled) setInstagramAccounts(result.accounts.filter((account) => account.status === "conectada")); })
+    listSocialAccountsFn()
+      .then((result) => { if (!cancelled) setSocialAccounts(result.accounts.filter((account) => account.status === "conectada")); })
       .catch(() => undefined);
     return () => { cancelled = true; };
   }, []);
@@ -389,7 +418,7 @@ export function LibraryPage() {
 
   return <StudioShell active="biblioteca">
     <PageIntro title="Biblioteca" subtitle="Videos, guiones y referencias de tu estudio." />
-    {!loading && instagramAccounts.length === 0 && <p className="content-feedback">Para publicar un Reel, conecta una cuenta profesional desde <a href="/cuentas">Cuentas</a>.</p>}
+    {!loading && socialAccounts.length === 0 && <p className="content-feedback">Conecta Instagram o TikTok desde <a href="/cuentas">Cuentas</a> para enviar tus videos.</p>}
     {error && <p className="prototype-notice" role="alert">{error}</p>}
     <form className="library-toolbar" onSubmit={handleCreate}>
       <div className="library-search"><Icon><path d="M12 5v14M5 12h14" /></Icon><input aria-label="Título de la nueva pieza" placeholder="Título de la nueva pieza" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={160} required /></div>
@@ -401,7 +430,7 @@ export function LibraryPage() {
         <ul className="library-list">
           {items.length === 0 && <li className="content-empty">Todavía no hay piezas. Crea una arriba para guardar su guion, archivo y fecha.</li>}
           {items.length > 0 && visibleItems.length === 0 && <li className="content-empty">No encontramos piezas que coincidan con esa búsqueda.</li>}
-          {visibleItems.map((item) => <ContentEditor key={item.id} item={item} instagramAccounts={instagramAccounts} onChanged={refresh} onDeleted={async (cleanupPending) => { await refresh(); if (cleanupPending) setError("La pieza se eliminó; no se pudo borrar su archivo de R2."); }} />)}
+          {visibleItems.map((item) => <ContentEditor key={item.id} item={item} accounts={socialAccounts} onChanged={refresh} onDeleted={async (cleanupPending) => { await refresh(); if (cleanupPending) setError("La pieza se eliminó; no se pudo borrar su archivo de R2."); }} />)}
         </ul>
       )}
     </PageSection>
@@ -410,86 +439,115 @@ export function LibraryPage() {
 }
 
 export function AccountsPage() {
-  const [instagramAccounts, setInstagramAccounts] = useState<InstagramAccountSummary[]>([]);
-  const [configured, setConfigured] = useState(false);
-  const [accountsLoading, setAccountsLoading] = useState(true);
+  const [connections, setConnections] = useState<Awaited<ReturnType<typeof listSocialAccountsFn>> | null>(null);
   const [accountError, setAccountError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-
-  async function refreshAccounts() {
-    setAccountsLoading(true);
-    try {
-      const result = await listInstagramAccountsFn();
-      setInstagramAccounts(result.accounts);
-      setConfigured(result.configured);
-      setAccountError(null);
-    } catch (error) {
-      setAccountError(error instanceof Error ? error.message : "No se pudieron cargar las cuentas.");
-    } finally {
-      setAccountsLoading(false);
-    }
-  }
+  const [disconnecting, setDisconnecting] = useState<string | null>(null);
+  const platforms: SocialPlatform[] = ["Instagram", "TikTok"];
 
   useEffect(() => {
     let cancelled = false;
-    listInstagramAccountsFn()
-      .then((result) => {
-        if (cancelled) return;
-        setInstagramAccounts(result.accounts);
-        setConfigured(result.configured);
-      })
-      .catch((error) => {
-        if (!cancelled) setAccountError(error instanceof Error ? error.message : "No se pudieron cargar las cuentas.");
-      })
-      .finally(() => { if (!cancelled) setAccountsLoading(false); });
-    const status = new URLSearchParams(window.location.search).get("instagram");
-    const messages: Record<string, string> = {
-      connected: "Cuenta de Instagram conectada.",
-      denied: "No se concedieron los permisos de Instagram.",
-      config: "Instagram todavía no está configurado. Revisa los datos de conexión de Meta más abajo.",
-      expired: "La conexión venció. Vuelve a intentarlo.",
-      invalid: "No se pudo validar la conexión.",
-      token_error: "Instagram no entregó un token válido. Intenta conectar de nuevo.",
-      profile_error: "No se pudo leer el perfil profesional de Instagram.",
-      error: "No se pudo completar la conexión. Revisa el callback, las migraciones y los registros del Worker.",
-    };
-    if (status && messages[status]) {
-      setNotice(messages[status]);
-      window.history.replaceState({}, "", window.location.pathname);
+    listSocialAccountsFn()
+      .then((result) => { if (!cancelled) setConnections(result); })
+      .catch(() => { if (!cancelled) setAccountError("No se pudieron cargar las cuentas. Recarga la página para reintentar."); });
+
+    const url = new URL(window.location.href);
+    const platform = url.searchParams.has("instagram") ? "Instagram" : url.searchParams.has("tiktok") ? "TikTok" : null;
+    if (platform) {
+      const provider = platform.toLowerCase();
+      const messages: Record<string, string> = {
+        connected: `Cuenta de ${platform} conectada. Si querías añadir otro perfil, cambia de cuenta en ${platform} y vuelve a intentarlo.`,
+        reconnected: `Se renovó la conexión con ${platform}. Para añadir otro perfil, cambia de cuenta en ${platform}.`,
+        denied: `Se canceló la conexión con ${platform}.`,
+        config: `Falta configurar la conexión con ${platform}.`,
+        expired: `La conexión con ${platform} venció. Vuelve a intentarlo.`,
+        invalid: `No se pudo validar la conexión con ${platform}. Iníciala otra vez desde Cuentas.`,
+        token_error: "Instagram no completó la autorización. Comprueba los permisos y vuelve a conectar la cuenta.",
+        profile_error: "Instagram no devolvió un perfil profesional. Comprueba la cuenta elegida.",
+      };
+      const status = url.searchParams.get(provider) ?? "";
+      const message = Object.hasOwn(messages, status) ? messages[status] : `No se pudo conectar ${platform}. Comprueba la autorización del perfil y vuelve a intentarlo.`;
+      setNotice(message);
+      url.searchParams.delete(provider);
+      window.history.replaceState(window.history.state, "", url);
     }
     return () => { cancelled = true; };
   }, []);
 
-  async function disconnectInstagram(account: InstagramAccountSummary) {
-    if (!window.confirm("¿Desconectar " + account.handle + " de Nex?")) return;
+  async function disconnectAccount(account: SocialAccountSummary, label: string) {
+    if (!window.confirm(`¿Desconectar ${label} de ${account.platform}?`)) return;
+    setDisconnecting(account.id);
+    setAccountError(null);
+    setNotice(null);
     try {
-      const response = await fetch("/api/social/instagram/disconnect", {
+      const response = await fetch(`/api/social/${account.platform.toLowerCase()}/disconnect`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ accountId: account.id }),
       });
-      const data = await response.json() as { error?: string };
-      if (!response.ok) throw new Error(data.error ?? "No se pudo desconectar la cuenta.");
-      setNotice(account.handle + " se desconectó de Nex.");
-      await refreshAccounts();
+      const data = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) throw new Error(data?.error ?? "No se pudo desconectar la cuenta.");
+      setConnections((current) => current && {
+        ...current,
+        accounts: current.accounts.map((row) => row.id === account.id ? { ...row, status: "desconectada", token_expires_at: null } : row),
+      });
+      setNotice(`${label} se desconectó de ${account.platform} en Nex.`);
     } catch (error) {
       setAccountError(error instanceof Error ? error.message : "No se pudo desconectar la cuenta.");
+    } finally {
+      setDisconnecting(null);
     }
   }
 
   return <StudioShell active="cuentas">
-    <PageIntro title="Cuentas" subtitle="Conecta las cuentas profesionales donde publicarás tus piezas." />
+    <PageIntro title="Cuentas" subtitle="Conecta cada perfil donde quieres compartir tus videos." />
     {notice && <p className="content-feedback" role="status">{notice}</p>}
     {accountError && <p className="content-feedback" role="alert">{accountError}</p>}
-    {accountsLoading ? <section className="account-overview account-overview-loading" role="status" aria-label="Cargando configuración de Instagram" aria-busy="true"><span className="overview-icon"><span className="skeleton-pulse overview-icon-skeleton" /></span><div><span className="skeleton-pulse account-overview-title-skeleton" /><span className="skeleton-pulse account-overview-copy-skeleton" /></div><span className="skeleton-pulse account-overview-button-skeleton" /></section> : <section className="account-overview"><span className="overview-icon"><Icon><circle cx="9" cy="8" r="3" /><path d="M3 20v-1a6 6 0 0 1 12 0v1M16 5a3 3 0 0 1 0 6M18 14a5 5 0 0 1 3 4.6V20" /></Icon></span><div><strong>Instagram</strong><p>Puedes conectar varias cuentas profesionales, una por una.</p></div>{configured ? <a className="primary-button" href="/api/social/instagram/connect"><Icon><path d="M12 5v14M5 12h14" /></Icon><span>{instagramAccounts.length ? "Añadir cuenta" : "Conectar Instagram"}</span></a> : <button className="primary-button" type="button" disabled><Icon><path d="M12 5v14M5 12h14" /></Icon><span>Conectar Instagram</span></button>}</section>}
-    {!accountsLoading && !configured && <div className="social-config-note"><strong>Falta configurar la aplicación de Meta</strong><p>En los secretos del Worker añade <code>INSTAGRAM_APP_ID</code>, <code>INSTAGRAM_APP_SECRET</code> y <code>INSTAGRAM_TOKEN_ENCRYPTION_KEY</code>. La versión Graph usa <code>v27.0</code> si no defines una propia; <code>PUBLIC_APP_URL</code> es opcional.</p><p>Agrega esta URI exacta en el inicio de sesión de Instagram dentro de Meta: <code>{window.location.origin}/api/social/instagram/callback</code>.</p><p>En modo desarrollo, añade cada cuenta como tester de Instagram y acepta la invitación. Solo se admiten cuentas profesionales.</p></div>}
-    <PageSection title="Cuentas conectadas" detail="Cada autorización se guarda de forma independiente en tu estudio.">
-      {accountsLoading ? <SkeletonRows count={2} label="Cargando cuentas conectadas" variant="compact" /> : instagramAccounts.length === 0 ? <p className="content-empty">Aún no hay cuentas de Instagram conectadas.</p> : <ul className="account-list">
-        {instagramAccounts.map((account) => <li className="account-row" key={account.id}><div className="account-social account-social-instagram"><SocialIcon platform="Instagram" /></div><div className="account-identity"><strong>{account.handle}</strong><span>Instagram · Cuenta profesional</span></div><div className="account-purpose">Publicaciones y Reels</div><span className={`account-status${account.status !== "conectada" ? " account-status-muted" : ""}`}><i />{account.status === "conectada" ? "Conectada" : "Desconectada"}</span></li>)}
-      </ul>}
-    </PageSection>
-    {!accountsLoading && instagramAccounts.filter((account) => account.status === "conectada").map((account) => <div className="account-disconnect-row" key={account.id}><span>Token cifrado en D1 · autorización hasta {account.token_expires_at ? new Date(account.token_expires_at).toLocaleDateString("es-EC") : "sin fecha"}</span><button className="quiet-button" type="button" onClick={() => void disconnectInstagram(account)}>Desconectar {account.handle}</button></div>)}
-    <div className="permission-note"><Icon><path d="M12 3 4 6v5c0 5 3.4 8 8 10 4.6-2 8-5 8-10V6z" /><path d="M9 12h6M12 9v6" /></Icon><p><strong>Permisos solicitados</strong><span>Instagram básico y publicación de contenido para leer la cuenta y publicar Reels cuando lo confirmes.</span></p></div>
+    {!connections && !accountError && <SkeletonRows count={2} label="Cargando cuentas conectadas" variant="compact" />}
+    {connections && platforms.map((platform) => {
+      const provider = platform.toLowerCase();
+      const instagram = platform === "Instagram";
+      const accounts = connections.accounts.filter((account) => account.platform === platform);
+      const endpoint = `/api/social/${provider}/connect`;
+      const action = accounts.length ? "Añadir cuenta" : `Conectar ${platform}`;
+      return <section key={platform} aria-label={`Cuentas de ${platform}`}>
+        <div className="account-overview">
+          <span className="overview-icon"><SocialIcon platform={platform} /></span>
+          <div>
+            <strong>{platform}</strong>
+            <p>{instagram ? "Publica Reels en cuentas profesionales." : "Envía videos a la bandeja para completarlos en TikTok."}</p>
+            {connections.configured[platform] && accounts.length > 0 && <p>Para añadir otro perfil, cambia de cuenta en {platform} y pulsa Añadir cuenta.</p>}
+          </div>
+          {connections.configured[platform] && <a className="primary-button" href={endpoint} aria-label={accounts.length ? `Añadir cuenta de ${platform}` : action}>
+            <Icon><path d="M12 5v14M5 12h14" /></Icon><span>{action}</span>
+          </a>}
+        </div>
+        {!connections.configured[platform] && <div className="social-config-note">
+          <strong>Configuración pendiente</strong>
+          <p>{instagram ? "Configura Instagram Login en Meta Developers para poder añadir perfiles profesionales." : "Configura Login Kit y el permiso de carga de video en TikTok for Developers para poder añadir perfiles."}</p>
+        </div>}
+        {accounts.length === 0 ? <p className="content-empty">Aún no hay cuentas de {platform} conectadas.</p> : <ul className="account-list">
+          {accounts.map((account) => {
+            const label = accountLabel(account, accounts);
+            const connected = account.status === "conectada";
+            const expired = instagram && !!account.token_expires_at && Date.parse(account.token_expires_at) <= Date.now();
+            const status = !connected ? "Desconectada" : expired ? "Autorización vencida" : "Conectada";
+            return <li key={account.id}>
+              <div className="account-row">
+                <div className={`account-social account-social-${provider}`}><SocialIcon platform={platform} /></div>
+                <div className="account-identity"><strong title={label}>{label}</strong><span>{instagram ? "Cuenta profesional" : "Cuenta de TikTok"}</span></div>
+                <div className="account-purpose">{instagram ? "Reels" : "Borradores de video"}</div>
+                <span className={`account-status${!connected || expired ? " account-status-muted" : ""}`}><i />{status}</span>
+              </div>
+              {(connected || connections.configured[platform]) && <div className="account-disconnect-row">
+                {connections.configured[platform] && (!connected || expired) && <a href={endpoint} className="quiet-button" aria-label={`Volver a conectar ${label} en ${platform}`}>Volver a conectar</a>}
+                {connected && <button className="quiet-button" type="button" disabled={disconnecting !== null} onClick={() => void disconnectAccount(account, label)}>{disconnecting === account.id ? "Desconectando…" : `Desconectar ${label}`}</button>}
+              </div>}
+            </li>;
+          })}
+        </ul>}
+      </section>;
+    })}
   </StudioShell>;
 }
 
@@ -506,7 +564,7 @@ export function SettingsPage() {
     <PageSection title="Apariencia" detail="El modo oscuro se abre por defecto. Puedes cambiarlo desde el botón de tema en la barra superior.">
       <p className="settings-hint">La preferencia de tema se guarda en este navegador.</p>
     </PageSection>
-    <PageSection title="Redes sociales" detail="Administra conexiones de Instagram y los permisos de publicación.">
+    <PageSection title="Redes sociales" detail="Administra tus conexiones de Instagram y TikTok.">
       <Link className="primary-button" to="/cuentas">Gestionar cuentas</Link>
     </PageSection>
     <RegisteredUsersSection />

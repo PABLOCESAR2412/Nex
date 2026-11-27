@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { getCurrentSession } from "../lib/auth";
 import { getDb, getRuntimeEnv, newId } from "../lib/db";
-import { encryptInstagramToken, instagramConfig, randomSecret, sha256Hex } from "../lib/instagram";
+import { encryptInstagramToken, instagramConfig, sha256Hex } from "../lib/instagram";
 
-type TokenResponse = { access_token?: string; user_id?: string | number; expires_in?: number; error_message?: string };
+type TokenResponse = { access_token?: string; user_id?: string | number; expires_in?: number };
 type ProfileResponse = { user_id?: string | number; id?: string | number; username?: string };
+type InstagramEnvelope<T> = T & { data?: T[] };
 
 function resultRedirect(status: string, requestOrigin: string) {
   const base = getRuntimeEnv().PUBLIC_APP_URL?.trim().replace(/\/+$/, "") || requestOrigin;
@@ -24,10 +26,12 @@ export const Route = createFileRoute("/api/social/instagram/callback")({
         if (!code || !state) return resultRedirect("invalid", requestOrigin);
 
         try {
+          const session = await getCurrentSession();
+          if (!session || session.passwordChangeRequired) return resultRedirect("expired", requestOrigin);
           const db = getDb();
           const stateRow = await db
-            .prepare("DELETE FROM instagram_oauth_states WHERE state_hash = ? AND expires_at > ? RETURNING user_id")
-            .bind(await sha256Hex(state), new Date().toISOString())
+            .prepare("DELETE FROM instagram_oauth_states WHERE state_hash = ? AND user_id = ? AND expires_at > ? RETURNING user_id")
+            .bind(await sha256Hex(state), session.userId, new Date().toISOString())
             .first<{ user_id: string }>();
           if (!stateRow) return resultRedirect("expired", requestOrigin);
 
@@ -40,7 +44,8 @@ export const Route = createFileRoute("/api/social/instagram/callback")({
           form.set("code", code);
 
           const shortResponse = await fetch("https://api.instagram.com/oauth/access_token", { method: "POST", body: form });
-          const shortToken = await shortResponse.json().catch(() => null) as TokenResponse | null;
+          const payload = await shortResponse.json().catch(() => null) as InstagramEnvelope<TokenResponse> | null;
+          const shortToken = payload?.data?.[0] ?? payload;
           if (!shortResponse.ok || !shortToken?.access_token) return resultRedirect("token_error", requestOrigin);
 
           const exchangeUrl = new URL("https://graph.instagram.com/access_token");
@@ -56,8 +61,11 @@ export const Route = createFileRoute("/api/social/instagram/callback")({
           const profileResponse = await fetch(profileUrl, {
             headers: { authorization: "Bearer " + longToken.access_token },
           });
-          const profile = await profileResponse.json().catch(() => null) as ProfileResponse | null;
-          const externalId = profile?.user_id ?? profile?.id ?? longToken.user_id ?? shortToken.user_id;
+          const profilePayload = await profileResponse.json().catch(() => null) as InstagramEnvelope<ProfileResponse> | null;
+          const profile = profilePayload?.data?.[0] ?? profilePayload;
+          const externalId = [profile?.user_id, profile?.id, longToken.user_id, shortToken.user_id].find((id) =>
+            typeof id === "string" ? /^\d+$/.test(id) : typeof id === "number" && Number.isSafeInteger(id) && id > 0
+          );
           if (!profileResponse.ok || !externalId || !profile?.username) return resultRedirect("profile_error", requestOrigin);
 
           const encrypted = await encryptInstagramToken(longToken.access_token);
